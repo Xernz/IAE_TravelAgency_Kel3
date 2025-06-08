@@ -25,6 +25,7 @@ exports.listAllLocalTravel = (req, res) => {
 };
 
 exports.filterLocalTravel = (req, res) => {
+  console.log('Incoming /filter query:', req.query);
   const { 
     origin_city, destination_city, origin_province, destination_province,
     origin_kabupaten, destination_kabupaten, type, operator_name, provider,
@@ -60,9 +61,13 @@ exports.filterLocalTravel = (req, res) => {
     page: page ? parseInt(page) : 1,
     limit: limit ? parseInt(limit) : 10
   };
+  console.log('Converted filter params:', params);
   
   LocalTravel.filter(params, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    if (err) {
+      console.error('LocalTravel.filter error:', err);
+      return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    }
     
     // Return data and pagination metadata
     res.json({

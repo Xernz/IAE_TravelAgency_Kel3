@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import formatIDR from '../../utils/formatIDR';
 import { useQuery } from '@apollo/client';
-import { GET_TRAINS } from '../../services/graphqlQueries';
+import { FILTER_TRAINS } from '../services/graphqlTrainQueries';
 import Pagination from '../common/Pagination';
 import './TrainList.css';
-import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Box, Typography, CircularProgress } from '@mui/material';
+import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Box, Typography, CircularProgress } from '@mui/material';
 
 // Sample data for dropdowns
 const provinces = [
@@ -28,25 +28,25 @@ const trainTypes = [
 ];
 
 export default function TrainList() {
+  // UI filter state uses short names; map to GraphQL variable names
   const initialFilters = {
-    origin: '',
-    destination: '',
-    date: '',
-    origin_province: '',
-    destination_province: '',
-    origin_city: '',
-    destination_city: '',
-    origin_station: '',
-    destination_station: '',
+    origin_station_name: '',
+    destination_station_name: '',
+    origin_station_code: '',
+    destination_station_code: '',
+    departure_date: '',
     train_class: '',
-    subclass: '',
-    train_type: '',
-    operator: '',
+    sub_class: '',
     min_price: '',
     max_price: '',
-    price_category: '',
+    operator_name: '',
+    train_type: '',
+    origin_city: '',
+    destination_city: '',
+    origin_province: '',
+    destination_province: '',
     sort_by: 'departure_time',
-    sort_order: 'ASC'
+    sort_order: 'ASC',
   };
 
   const [filters, setFilters] = useState(initialFilters);
@@ -54,11 +54,27 @@ export default function TrainList() {
   const [itemsPerPage] = useState(10);
 
   // Apollo Client query for trains
-  const { data, loading, error, refetch } = useQuery(GET_TRAINS, {
+  const { data, loading, error } = useQuery(FILTER_TRAINS, {
     variables: {
-      origin: filters.origin || undefined,
-      destination: filters.destination || undefined,
-      date: filters.date || undefined,
+      origin_station_name: filters.origin_station_name || undefined,
+      destination_station_name: filters.destination_station_name || undefined,
+      origin_station_code: filters.origin_station_code || undefined,
+      destination_station_code: filters.destination_station_code || undefined,
+      departure_date: filters.departure_date || undefined,
+      train_class: filters.train_class || undefined,
+      sub_class: filters.sub_class || undefined,
+      min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+      max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+      operator_name: filters.operator_name || undefined,
+      train_type: filters.train_type || undefined,
+      origin_city: filters.origin_city || undefined,
+      destination_city: filters.destination_city || undefined,
+      origin_province: filters.origin_province || undefined,
+      destination_province: filters.destination_province || undefined,
+      sort_by: filters.sort_by || 'departure_time',
+      sort_order: filters.sort_order || 'ASC',
+      page: currentPage,
+      limit: itemsPerPage,
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -73,17 +89,18 @@ export default function TrainList() {
   const handleFilterSubmit = (e) => {
     e.preventDefault();
     setCurrentPage(1);
-    refetch();
+    // Data will refetch automatically as variables change
   };
 
-  // Handle page change
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    refetch({ page });
+  // Handle page change (MUI Pagination typically provides event, value)
+  const handlePageChange = (event, value) => {
+    setCurrentPage(value);
+    // Data will refetch automatically as 'currentPage' in variables changes
   };
 
-  const trains = data?.trains || [];
-  const pagination = data?.trains?.pagination || { current_page: currentPage, total_pages: 1 };
+  const trains = data?.filterTrains?.trains || [];
+  const paginationInfo = data?.filterTrains?.pagination;
+  const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1 };
 
   // Render loading state
   if (loading) {
@@ -192,7 +209,6 @@ export default function TrainList() {
               name="train_class"
               value={filters.train_class}
               onChange={(e) => {
-                const selectedClass = e.target.value;
                 handleFilterChange(e);
                 setFilters(prev => ({ ...prev, subclass: '' }));
               }}
@@ -286,21 +302,21 @@ export default function TrainList() {
           </TableHead>
           <TableBody>
             {trains.length > 0 ? (
-              trains.map((item, idx) => (
-                <TableRow key={item.id} sx={{ backgroundColor: idx % 2 === 0 ? 'background.paper' : 'grey.50' }}>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.origin}</TableCell>
-                  <TableCell>{item.destination}</TableCell>
-                  <TableCell>{item.date}</TableCell>
-                  <TableCell>{formatIDR(item.price)}</TableCell>
-                  <TableCell>
-                    <Button variant="outlined" size="small" color="primary">Pesan</Button>
-                  </TableCell>
+              trains.map((train, idx) => (
+                <TableRow key={train.id} sx={{ backgroundColor: idx % 2 === 0 ? 'background.paper' : 'grey.50' }}>
+                  <TableCell>{train.train_name}</TableCell>
+                  <TableCell>{train.origin_station_name || train.origin_city}</TableCell>
+                  <TableCell>{train.destination_station_name || train.destination_city}</TableCell>
+                  <TableCell>{new Date(train.departure_time).toLocaleString()}</TableCell>
+                  <TableCell>{new Date(train.arrival_time).toLocaleString()}</TableCell>
+                  <TableCell>{train.train_class}{train.sub_class ? ` (${train.sub_class})` : ''}</TableCell>
+                  <TableCell>{formatIDR(train.price)}</TableCell>
+                  <TableCell>{train.operator_name}</TableCell>
                 </TableRow>
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={6} align="center" sx={{ py: 3 }}>
+                <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
                   <Typography color="textSecondary">Tidak ada data kereta yang tersedia</Typography>
                 </TableCell>
               </TableRow>
@@ -308,12 +324,13 @@ export default function TrainList() {
           </TableBody>
         </Table>
       </TableContainer>
-      {pagination && pagination.total_pages > 1 && (
+      {paginationInfo && currentPagination.total_pages > 1 && (
         <Box mt={3} display="flex" justifyContent="center">
           <Pagination
-            currentPage={pagination.current_page}
-            totalPages={pagination.total_pages}
-            onPageChange={handlePageChange}
+            currentPage={currentPagination.current_page}
+            totalPages={currentPagination.total_pages}
+            onChange={handlePageChange} // MUI uses onChange
+            color="primary" // Standard MUI prop
           />
         </Box>
       )}

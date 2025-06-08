@@ -206,6 +206,126 @@ export const GET_FLIGHTS = gql`
   }
 `;
 
+
+export const FILTER_FLIGHTS = gql`
+  query FilterFlights(
+    $origin_city: String
+    $destination_city: String
+    $origin_code: String
+    $destination_code: String
+    $airline_name: String
+    $airline_code: String
+    $flight_class: String
+    $departure_date: String # Format YYYY-MM-DD
+    $min_price: Float
+    $max_price: Float
+    $sort_by: String # e.g., "price", "departure_time"
+    $sort_order: String # "ASC" or "DESC"
+    $page: Int
+    $limit: Int
+  ) {
+    filterFlights(
+      filter: {
+        origin_city: $origin_city
+        destination_city: $destination_city
+        origin_code: $origin_code
+        destination_code: $destination_code
+        airline_name: $airline_name
+        airline_code: $airline_code
+        flight_class: $flight_class
+        departure_date: $departure_date
+        min_price: $min_price
+        max_price: $max_price
+      }
+      sort: {
+        by: $sort_by
+        order: $sort_order
+      }
+      pagination: {
+        page: $page
+        limit: $limit
+      }
+    ) {
+      flights {
+        id
+        airline_code
+        airline_name
+        flight_number
+        origin_city
+        destination_city
+        origin_code
+        destination_code
+        departure_time
+        arrival_time
+        duration
+        flight_class
+        price
+        seats_available
+        currency
+        stops
+        status
+      }
+      pagination {
+        total_items
+        total_pages
+        current_page
+        limit
+      }
+    }
+  }
+`;
+
+export const CREATE_FLIGHT_BOOKING = gql`
+  mutation CreateFlightBooking(
+    $userId: ID!,
+    $flightId: ID!,
+    $numberOfPassengers: Int!
+  ) {
+    createFlight(
+      userId: $userId,
+      flightId: $flightId,
+      numberOfPassengers: $numberOfPassengers
+    ) {
+      id                # Booking ID
+      user_id
+      flight_id         # Confirms which flight was booked
+      number_of_passengers
+      status            # e.g., "CONFIRMED", "PENDING_PAYMENT"
+      created_at
+      updated_at
+    }
+  }
+`;
+
+// Local Travel Booking
+export const CREATE_LOCAL_TRAVEL_BOOKING = gql`
+  mutation CreateLocalTravelBooking($userId: ID!, $localTravelId: ID!) {
+    createLocalTravel(userId: $userId, localTravelId: $localTravelId) {
+      id
+      user_id
+      local_travel_id
+      status
+      created_at
+      updated_at
+    }
+  }
+`;
+
+// Train Booking
+export const CREATE_TRAIN_BOOKING = gql`
+  mutation CreateTrainBooking($userId: ID!, $trainId: ID!, $numberOfSeats: Int!) {
+    createTrain(userId: $userId, trainId: $trainId, numberOfSeats: $numberOfSeats) {
+      id
+      user_id
+      train_id
+      number_of_seats
+      status
+      created_at
+      updated_at
+    }
+  }
+`;
+
 // Hotels
 
 // Hotel search by city/province (matches API Gateway's searchHotels)
@@ -253,20 +373,69 @@ export const GET_HOTELS = gql`
     }
   }
 `;
-
-// Hotel filtering
 export const FILTER_HOTELS = gql`
-  query FilterHotels($city: String, $province: String, $property_type: String, $min_star_rating: Int, $max_star_rating: Int, $min_price: Float, $max_price: Float, $has_breakfast: Boolean, $has_wifi: Boolean, $room_size_min: Int, $sort_by: String, $sort_order: String, $page: Int, $limit: Int) {
-    filterHotels(city: $city, province: $province, property_type: $property_type, min_star_rating: $min_star_rating, max_star_rating: $max_star_rating, min_price: $min_price, max_price: $max_price, has_breakfast: $has_breakfast, has_wifi: $has_wifi, room_size_min: $room_size_min, sort_by: $sort_by, sort_order: $sort_order, page: $page, limit: $limit) {
-      id
-      name
-      city
-      province
-      address
-      star_rating
-      property_type
-      has_wifi
-      has_breakfast
+  query FilterHotels(
+    $name: String
+    $city: String
+    $province: String
+    $country: String
+    $property_type: String
+    $min_star_rating: Float
+    $max_star_rating: Float
+    $amenities_include: [String!]
+    $is_pet_friendly: Boolean
+    $sortBy: String
+    $sortOrder: SortOrder
+    $page: Int
+    $limit: Int
+  ) {
+    filterHotels(
+      filters: {
+        name: $name
+        city: $city
+        province: $province
+        country: $country
+        property_type: $property_type
+        min_star_rating: $min_star_rating
+        max_star_rating: $max_star_rating
+        amenities_include: $amenities_include
+        is_pet_friendly: $is_pet_friendly
+      }
+      sort: {
+        sortBy: $sortBy
+        sortOrder: $sortOrder
+      }
+      pagination: {
+        page: $page
+        limit: $limit
+      }
+    ) {
+      hotels {
+        id
+        name
+        city
+        province
+        country
+        address
+        postal_code
+        star_rating
+        property_type
+        description
+        amenities # Array of strings
+        images # Array of strings (URLs)
+        has_wifi
+        has_breakfast
+        has_parking
+        is_pet_friendly
+        min_price_per_night
+        max_price_per_night
+      }
+      pagination {
+        totalItems
+        totalPages
+        currentPage
+        pageSize
+      }
     }
   }
 `;
@@ -317,10 +486,135 @@ export const INCREASE_ROOM_AVAILABILITY = gql`
   }
 `;
 
+// Create Hotel Booking
+export const CREATE_HOTEL_BOOKING = gql`
+  mutation CreateHotelBooking(
+    $userId: ID!
+    $hotelId: ID!
+    $roomTypeId: ID!
+    $checkInDate: String!
+    $checkOutDate: String!
+    $numberOfGuests: Int!
+    $totalPrice: Float! 
+    # Consider adding other relevant fields like guest details, special requests
+  ) {
+    createHotelBooking(
+      input: {
+        userId: $userId
+        hotelId: $hotelId
+        roomTypeId: $roomTypeId
+        checkInDate: $checkInDate
+        checkOutDate: $checkOutDate
+        numberOfGuests: $numberOfGuests
+        totalPrice: $totalPrice
+        # Ensure this input structure matches backend expectations
+      }
+    ) {
+      id # Booking ID
+      user_id # or userId, ensure consistency
+      hotel_id # or hotelId
+      room_type_id # or roomTypeId
+      check_in_date
+      check_out_date
+      number_of_guests
+      total_price
+      status # e.g., CONFIRMED, PENDING_PAYMENT
+      created_at
+      updated_at
+      # Include any other fields from the booking object that are useful to return
+    }
+  }
+`;
+
+
 
 // Local Travel
 
 // Local travel creation (aligned with API Gateway)
+
+export const FILTER_LOCAL_TRAVELS = gql`
+  query FilterLocalTravels(
+    $origin_city: String
+    $destination_city: String
+    $origin_province: String
+    $destination_province: String
+    $origin_kabupaten: String
+    $destination_kabupaten: String
+    $date: String # Format "YYYY-MM-DD"
+    $type: String # e.g., "taxi", "ojek", "bus"
+    $operator_name: String
+    $provider: String
+    $min_capacity: Int
+    $max_capacity: Int
+    $amenities_include_any: [String!]
+    $amenities_include_all: [String!]
+    $min_price: Float
+    $max_price: Float
+    $sort_by: String # e.g., "name", "price"
+    $sort_order: String # "ASC" or "DESC"
+    $page: Int
+    $limit: Int
+  ) {
+    filterLocalTravels(
+      filter: {
+        origin_city: $origin_city
+        destination_city: $destination_city
+        origin_province: $origin_province
+        destination_province: $destination_province
+        origin_kabupaten: $origin_kabupaten
+        destination_kabupaten: $destination_kabupaten
+        date: $date
+        type: $type
+        operator_name: $operator_name
+        provider: $provider
+        min_capacity: $min_capacity
+        max_capacity: $max_capacity
+
+        min_price: $min_price
+        max_price: $max_price
+      }
+      sort: {
+        by: $sort_by
+        order: $sort_order
+      }
+      pagination: {
+        page: $page
+        limit: $limit
+      }
+    ) {
+      localTravels {
+        id
+        name
+        type
+        provider
+        operator_name
+        origin_city
+        destination_city
+        origin_province
+        destination_province
+        departure_time
+        arrival_time
+        duration
+        price
+        currency
+        seats_available
+        capacity
+        vehicle_model
+        has_ac
+        has_wifi
+        amenities # Array of strings
+        images # Array of strings (URLs)
+      }
+      pagination {
+        total_items
+        total_pages
+        current_page
+        limit
+      }
+    }
+  }
+`;
+
 export const CREATE_LOCAL_TRAVEL = gql`
   mutation CreateLocalTravel($type: String!, $provider: String!, $origin: String!, $destination: String!, $departure_time: String!, $arrival_time: String!, $price: Float!, $seats_available: Int!) {
     createLocalTravel(
@@ -395,6 +689,46 @@ export const GET_TRAINS = gql`
       subclass
       train_type
       price_category
+    }
+  }
+`;
+
+// Advanced filter query for TrainList.js (matches backend and GraphQL API)
+// Advanced filter query for TrainList.js (matches backend and GraphQL API)
+export const FILTER_TRAINS = gql`
+  query FilterTrains(
+    $filters: TrainFiltersInput
+    $sort: TrainSortInput
+    $pagination: PaginationInput
+  ) {
+    filterTrains(filters: $filters, sort: $sort, pagination: $pagination) {
+      trains {
+        id
+        train_number
+        origin_station_name
+        destination_station_name
+        origin_city
+        destination_city
+        origin_province
+        destination_province
+        departure_time
+        arrival_time
+        price
+        seats_available
+        train_class
+        subclass
+        train_type
+        operator
+        duration
+      }
+      pagination {
+        totalItems
+        totalPages
+        currentPage
+        pageSize
+        hasNextPage
+        hasPrevPage
+      }
     }
   }
 `;

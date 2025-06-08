@@ -1,11 +1,18 @@
--- Create databases for each microservice
-CREATE DATABASE IF NOT EXISTS travel_users_db;
-CREATE DATABASE IF NOT EXISTS travel_flight_db;
-CREATE DATABASE IF NOT EXISTS travel_hotel_db;
-CREATE DATABASE IF NOT EXISTS travel_booking_db;
-CREATE DATABASE IF NOT EXISTS travel_payment_db;
-CREATE DATABASE IF NOT EXISTS travel_local_travel_db;
-CREATE DATABASE IF NOT EXISTS travel_train_db;
+-- Drop and create databases for each microservice
+DROP DATABASE IF EXISTS travel_users_db;
+CREATE DATABASE travel_users_db;
+DROP DATABASE IF EXISTS travel_flight_db;
+CREATE DATABASE travel_flight_db;
+DROP DATABASE IF EXISTS travel_hotel_db;
+CREATE DATABASE travel_hotel_db;
+DROP DATABASE IF EXISTS travel_booking_db;
+CREATE DATABASE travel_booking_db;
+DROP DATABASE IF EXISTS travel_payment_db;
+CREATE DATABASE travel_payment_db;
+DROP DATABASE IF EXISTS travel_local_travel_db;
+CREATE DATABASE travel_local_travel_db;
+DROP DATABASE IF EXISTS travel_train_db;
+CREATE DATABASE travel_train_db;
 
 -- Create a general user for microservices to use
 -- Replace 'microservice_user' and 'secure_password' with your preferred values

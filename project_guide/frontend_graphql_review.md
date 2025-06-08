@@ -77,11 +77,11 @@ mutation CreatePayment(
 
 ## 4. Hotel Service
 
-### 4.1. Observations
-- `HotelList.js` provides filters for hotel name, accommodation type, city, and province, but the `GET_HOTELS` query only supports pagination.
-- The `useHotels` hook uses a basic `GET_HOTELS` query from `graphql.js` (supports only pagination).
-- No booking workflow or use of a `BOOK_HOTEL` mutation.
-- Room availability and pricing queries are not integrated.
+### 4.1. Observations & Status
+- 🚧 `HotelList.js` now uses the `FILTER_HOTELS` query, improving filter alignment (city, property_type). (Backend support for hotel `name` filter and pagination data in `FILTER_HOTELS` response is still pending).
+- ✅ The `useHotels` hook has been refactored to use `FILTER_HOTELS`.
+- ✅ **Booking Workflow:** A `CREATE_HOTEL_BOOKING` mutation has been defined and integrated into `HotelDetail.js`, enabling users to select rooms, dates, guests, and complete bookings.
+- ✅ Room availability and pricing are displayed in `HotelDetail.js` from `GET_HOTEL_DETAIL` query.
 
 ### 4.2. Recommendations
 - Switch to using the `FILTER_HOTELS` query for hotel listing and filtering.
@@ -106,11 +106,9 @@ mutation CreatePayment(
 
 ## 6. Train Service
 
-### 6.1. Observations
-- `TrainList.js` provides extensive filters, but the `GET_TRAINS` query only supports origin, destination, and date.
-- Pagination and sorting variables are not supported by the backend query.
-- The booking button is present but not functional; no `BOOK_TRAIN` mutation exists.
-- Essential fields like price and schedule are missing from the query response.
+### 6.1. Observations & Status
+- 🚧 `TrainList.js` has been refactored to use the `FILTER_TRAINS` query, significantly improving filter alignment. Pagination (MUI) has been integrated. (Backend support for all UI filters, sorting, and comprehensive data like price/schedule in `FILTER_TRAINS` is still a dependency).
+- ❌ The booking button is present but not functional; no `BOOK_TRAIN` mutation exists.
 
 ### 6.2. Recommendations
 - Major backend and frontend update to support all UI filters in `GET_TRAINS`.
@@ -121,11 +119,13 @@ mutation CreatePayment(
 
 ## 7. MyBookings Page
 
-### 7.1. Observations
-- Uses `GET_MY_BOOKINGS` query but does not pass the required `userId` variable.
-- The UI only displays booking IDs and status, not the details of what was booked.
-- Conflicting/duplicate code for payment and modification handling.
-- The `CANCEL_BOOKING` mutation is called with the wrong variable name.
+### 7.1. Observations & Status
+- ✅ **Status: Resolved.**
+  - `MyBookings.js` now correctly passes `userId` (from `AuthContext`) to the `GET_MY_BOOKINGS` query.
+  - The UI now displays booking item details (type, ref_id, date, details), booking status, and creation date.
+  - Conflicting/duplicate code has been removed.
+  - `CANCEL_BOOKING` and `MODIFY_BOOKING` mutations are called with correct variable names.
+  - The necessary GraphQL operations (`GET_MY_BOOKINGS`, `CANCEL_BOOKING`, `MODIFY_BOOKING`, `CREATE_PAYMENT`) have been verified as correctly defined in `graphqlQueries.js`.
 
 ### 7.2. Recommendations
 - Pass `userId` to `GET_MY_BOOKINGS`.
@@ -136,9 +136,9 @@ mutation CreatePayment(
 
 ## 8. Custom Hooks (`useHotels`)
 
-### 8.1. Observations
-- The `useHotels` hook in `services/graphql.js` uses a basic `GET_HOTELS` query that only supports pagination.
-- This does not align with the filtering needs of `HotelList.js`.
+### 8.1. Observations & Progress
+- ✅ **Status: Resolved.**
+  - The `useHotels` hook in `services/graphql.js` has been refactored to use the `FILTER_HOTELS` query and accepts filter parameters, aligning it with the needs of `HotelList.js`.
 
 ### 8.2. Recommendations
 - Refactor `useHotels` to use `FILTER_HOTELS` and accept filter parameters.
@@ -157,15 +157,64 @@ mutation CreatePayment(
 ### 9.2. Next Steps (Prioritized)
 
 1. **Implement Core Booking Functionality (CRITICAL):**
-   - Define and implement `BOOK_FLIGHT`, `BOOK_HOTEL`, `BOOK_LOCAL_TRAVEL`, and `BOOK_TRAIN` mutations and corresponding frontend workflows.
+   - ✅ **`BOOK_HOTEL`:** (Mutation `CREATE_HOTEL_BOOKING` defined and integrated into `HotelDetail.js`).
+   - ✅ **`BOOK_FLIGHT` (as `createFlight`):** Mutation defined in `graphqlQueries.js` and integrated into `FlightDetail.js`.
+   - ✅ **`BOOK_LOCAL_TRAVEL` (as `createLocalTravel`):** Mutation defined in `graphqlQueries.js` and integrated into `LocalTravelDetail.js`.
+   - ✅ **`BOOK_TRAIN` (as `createTrain`):** Mutation defined in `graphqlQueries.js` and integrated into `TrainDetail.js`.
 2. **Address Query-Filter Mismatches (HIGH PRIORITY):**
-   - Enhance queries and resolvers to accept all UI filters; update frontend components to pass them.
+   - 🚧 **`HotelList.js`:** (Uses `FILTER_HOTELS`; some backend filter enhancements still needed).
+   - 🚧 **`TrainList.js`:** (Uses `FILTER_TRAINS`; backend filter/data enhancements still needed).
+   - Enhance other queries and resolvers to accept all UI filters; update frontend components to pass them.
 3. **Fix MyBookings Page (HIGH PRIORITY):**
-   - Pass `userId`, display booking item details, and resolve code conflicts.
+   - ✅ **Status: DONE.** (Passed `userId`, displays item details, conflicts resolved).
 4. **Enhance Queries (MEDIUM PRIORITY):**
-   - Add pagination, sorting, and missing data fields to all relevant queries.
-5. **Refine Payment Integration (MEDIUM PRIORITY):**
-   - Fully utilize all payment mutation fields and improve payment UI.
+   - 🚧 **Hotels (`FILTER_HOTELS`):**
+     - **Frontend Status:** `HotelList.js` and `useHotels` hook correctly use `FILTER_HOTELS`. UI for name, city, property type filters exists. Client-side pagination is a temporary workaround.
+     - **Backend Dependencies (Blocking full frontend functionality):**
+       - `FILTER_HOTELS` query needs to support filtering by hotel `name`.
+       - `FILTER_HOTELS` query response must include pagination metadata (e.g., `total_items`, `total_pages`).
+       - `FILTER_HOTELS` query response should include `image_url`, `description`, and `facilities` for richer display.
+     - See `graphql_misalignment.md` (Section 8) for detailed requirements for the backend team.
+   - 🚧 **Flights (`FILTER_FLIGHTS`):**
+     - **Frontend Status:** `FILTER_FLIGHTS` is now defined in `frontend/src/services/graphqlQueries.js`. `FlightList.js` is built to use this query. UI for filters (origin, destination, airline, price, date) and pagination exists.
+     - **Backend Dependencies (Blocking full frontend functionality):**
+       - The `filterFlights` resolver and schema need to be implemented on the backend.
+       - This query must support filters: `origin`, `destination`, `airline`, `min_price`, `max_price`, `date`.
+       - It must support pagination: `page`, `limit`.
+       - It must return a `filterFlights` field containing `flights` (array) and `pagination` (object with `total_pages`, `current_page`, `limit`, `total_items`).
+     - **Frontend Dependencies (Post-Backend Implementation & Verification):**
+       - Verify seamless integration and functionality in `FlightList.js` with the backend resolver.
+       - Ensure all UI filter controls correctly interact with the query variables.
+     - See `graphql_misalignment.md` (Section 9) for detailed backend requirements.
+   - 🚧 **Trains (`FILTER_TRAINS`):**
+     - **Frontend Status:** `FILTER_TRAINS` is now defined in `frontend/src/services/graphqlQueries.js`. `TrainList.js` is built to use this query. UI for many filters (station names, date, class, price, operator, sorting, province/city, etc.) and pagination exists. A comment in `TrainList.js` notes several UI filters that will require backend support.
+     - **Backend Dependencies (Blocking full frontend functionality):**
+       - The `filterTrains` resolver and schema need to be implemented on the backend.
+       - This query must support filters for: `origin_station_name`, `destination_station_name`, `departure_date`, `train_class`, `min_price`, `max_price`, `operator`, `sort_by`, `sort_order`. Support for `origin_province`, `destination_province`, `origin_city`, `destination_city`, `subclass`, `train_type`, `price_category` would be ideal enhancements.
+       - It must support pagination: `page`, `limit`.
+       - It must return a `filterTrains` field containing `trains` (array) and `pagination` (object with `total_pages`, `current_page`, `limit`, `total_items`).
+     - **Frontend Dependencies (Post-Backend Implementation & Verification):**
+       - Align active filters in `TrainList.js` with actual backend support.
+       - Verify seamless integration and functionality in `TrainList.js`.
+     - See `graphql_misalignment.md` (Section 10) for detailed backend requirements.
+   - 🚧 **Local Travel (`FILTER_LOCAL_TRAVELS`):**
+     - **Frontend Status:** `FILTER_LOCAL_TRAVELS` is now defined in `frontend/src/services/graphqlQueries.js`. `LocalTravelList.js` is built to use this query. UI for filters (origin, destination, date, type, price range) and pagination exists.
+     - **Backend Dependencies (Blocking full frontend functionality):**
+       - The `filterLocalTravels` resolver and schema need to be implemented on the backend.
+       - This new query must support filters: `origin`, `destination`, `date`, `type`, `min_price`, `max_price`.
+       - It must support pagination: `page`, `limit`, and ideally sorting options.
+       - It must return a `filterLocalTravels` field containing `localTravels` (array) and `pagination` (object with `total_pages`, `current_page`, `limit`, `total_items`).
+     - **Frontend Dependencies (Post-Backend Implementation & Verification):**
+       - Verify seamless integration and functionality in `LocalTravelList.js`.
+       - Align UI filters with actual backend support.
+     - See `graphql_misalignment.md` (Section 11) for detailed backend requirements.
+   - **Summary of Query Enhancement Needs:** All primary listing components (`HotelList`, `FlightList`, `TrainList`, `LocalTravelList`) now have their respective filter queries (`FILTER_HOTELS`, `FILTER_FLIGHTS`, `FILTER_TRAINS`, `FILTER_LOCAL_TRAVELS`) defined on the frontend. The critical next step is for the backend team to implement or enhance the corresponding resolvers to support all specified filters, pagination, sorting, and return all necessary data fields as detailed in `graphql_misalignment.md`. This backend work is the primary blocker for achieving full frontend functionality in these list pages.
+5. **Refine Payment Integration in `MyBookings.js` (HIGH PRIORITY):**
+   - ✅ **`CREATE_PAYMENT` Mutation:** Verified as correctly defined in `frontend/src/services/graphqlQueries.js`.
+   - ✅ **Integrate Mutation:** `CREATE_PAYMENT` is exclusively used in `MyBookings.js`. Legacy REST API calls and conflicting payment logic have been verified as removed.
+   - ✅ **Utilize Fields:** Payment mutation fields (`currency`, `payment_reference`) are utilized.
+   - ✅ **Improve UI:** Payment UI has been enhanced (dropdown for payment method, reference field).
+   - ✅ **Status: DONE.** (Completed 2025-06-08)
 6. **Code Cleanup (MEDIUM PRIORITY):**
    - Remove legacy code and ensure consistency across all components.
 

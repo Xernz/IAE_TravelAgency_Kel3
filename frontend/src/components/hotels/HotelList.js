@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import formatIDR from '../../utils/formatIDR';
-import { useQuery } from '@apollo/client';
-import { GET_HOTELS } from '../../services/graphqlQueries';
+import { useHotels } from '../services/graphqlHotelQueries'; // Updated import
 import { 
   Box, 
   Button, 
@@ -30,23 +29,51 @@ export default function HotelList() {
     'Cottage', 'Bungalow', 'Penginapan', 'Losmen', 'Wisma'
   ];
   
+  // UI filter state uses short names; map to GraphQL variable names
   const initialFilters = {
+    name: '',
     city: '',
-    province: ''
+    province: '',
+    country: '',
+    property_type: '',
+    min_star_rating: '',
+    max_star_rating: '',
+    min_price_per_night: '',
+    max_price_per_night: '',
+    amenities_include_any: [],
+    amenities_include_all: [],
+    is_pet_friendly: '',
+    min_room_size_sqm: '',
+    sort_by: '',
+    sort_order: '',
   };
 
   const [filters, setFilters] = useState(initialFilters);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Apollo Client query for hotels
-  const { data, loading, error, refetch } = useQuery(GET_HOTELS, {
-    variables: {
-      city: filters.city || undefined,
-      province: filters.province || undefined,
-    },
-    fetchPolicy: 'cache-and-network'
-  });
+  // Prepare filters for the useHotels hook
+  const queryFilters = {
+    name: filters.name || undefined,
+    city: filters.city || undefined,
+    province: filters.province || undefined,
+    country: filters.country || undefined,
+    property_type: filters.property_type || undefined,
+    min_star_rating: filters.min_star_rating ? parseInt(filters.min_star_rating) : undefined,
+    max_star_rating: filters.max_star_rating ? parseInt(filters.max_star_rating) : undefined,
+    min_price_per_night: filters.min_price_per_night ? parseFloat(filters.min_price_per_night) : undefined,
+    max_price_per_night: filters.max_price_per_night ? parseFloat(filters.max_price_per_night) : undefined,
+    amenities_include_any: filters.amenities_include_any && filters.amenities_include_any.length > 0 ? filters.amenities_include_any : undefined,
+    amenities_include_all: filters.amenities_include_all && filters.amenities_include_all.length > 0 ? filters.amenities_include_all : undefined,
+    is_pet_friendly: filters.is_pet_friendly === '' ? undefined : Boolean(filters.is_pet_friendly),
+    min_room_size_sqm: filters.min_room_size_sqm ? parseFloat(filters.min_room_size_sqm) : undefined,
+    sort_by: filters.sort_by || undefined,
+    sort_order: filters.sort_order || undefined,
+    page: currentPage,
+    limit: itemsPerPage,
+  };
+
+  const { data, loading, error } = useHotels(queryFilters);
 
   // Handle filter change
   const handleFilterChange = (e) => {
@@ -61,24 +88,27 @@ export default function HotelList() {
   const handleFilterSubmit = (e) => {
     e.preventDefault();
     setCurrentPage(1);
-    refetch();
+    // Data should refetch automatically due to queryFilters changing via currentPage
   };
 
   // Handle page change
   const handlePageChange = (page) => {
     setCurrentPage(page);
-    refetch({ page });
+    // Data should refetch automatically due to queryFilters changing via currentPage
   };
 
   // Handle reset filters
   const handleResetFilters = () => {
     setFilters(initialFilters);
     setCurrentPage(1);
-    refetch({ page: 1, filters: initialFilters });
+    // Data should refetch automatically due to queryFilters changing
   };
 
-  const hotels = data?.hotels || [];
-  const pagination = data?.hotels?.pagination || { current_page: currentPage, total_pages: 1 };
+  const hotels = data?.filterHotels?.hotels || [];
+  const paginationInfo = data?.filterHotels?.pagination;
+
+  // Use backend pagination if available, otherwise provide sensible defaults
+  const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1, total_items: 0 };
 
   // Render loading state
   if (loading) {
@@ -241,12 +271,13 @@ export default function HotelList() {
       </Grid>
 
       {/* Pagination */}
-      {pagination && pagination.total_pages > 1 && (
+      {currentPagination && currentPagination.total_pages > 1 && (
         <Box mt={4} display="flex" justifyContent="center">
           <Pagination
-            currentPage={pagination.current_page}
-            totalPages={pagination.total_pages}
-            onPageChange={handlePageChange}
+            count={currentPagination.total_pages} // MUI uses 'count' for total pages
+            page={currentPagination.current_page}  // MUI uses 'page' for current page
+            onChange={handlePageChange} // MUI Pagination's default onChange prop
+            color="primary"
           />
         </Box>
       )}

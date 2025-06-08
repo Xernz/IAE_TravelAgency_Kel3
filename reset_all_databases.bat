@@ -11,7 +11,7 @@ set MYSQL_USER=microservice_user
 set MYSQL_PASS=secure_password
 set MYSQL_HOST=localhost
 REM Update MYSQL_BIN path if your MySQL version or Laragon path is different
-set MYSQL_BIN="C:\laragon\bin\mysql\mysql-8.0.30-winx64\bin\mysql.exe"
+set MYSQL_BIN="C:\laragon\bin\mysql\mysql-8.4.3-winx64\bin\mysql.exe"
 
 REM === Run the main environment setup (creates user/db if needed) ===
 echo Running environment setup (database_setup.sql)...

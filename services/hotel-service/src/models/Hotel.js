@@ -63,7 +63,7 @@ const Hotel = {
   
   filter: (params, callback) => {
     const { 
-      city, province, kabupaten, postal_code, property_type, min_star_rating, max_star_rating,
+      name, city, province, kabupaten, postal_code, property_type, min_star_rating, max_star_rating,
       min_price, max_price, has_breakfast, has_wifi, room_size_min, amenities,
       sort_by, sort_order, page, limit
     } = params;
@@ -77,82 +77,57 @@ const Hotel = {
       WHERE 1=1
     `;
     
+    const filters = [];
     const values = [];
+    if (name) { filters.push('h.name LIKE ?'); values.push(`%${name}%`); }
+    if (city) { filters.push('h.city = ?'); values.push(city); }
+    if (province) { filters.push('h.province = ?'); values.push(province); }
+    if (kabupaten) { filters.push('h.kabupaten = ?'); values.push(kabupaten); }
+    if (postal_code) { filters.push('h.postal_code = ?'); values.push(postal_code); }
+    if (property_type) { filters.push('h.property_type = ?'); values.push(property_type); }
+    if (min_star_rating) { filters.push('h.star_rating >= ?'); values.push(min_star_rating); }
+    if (max_star_rating) { filters.push('h.star_rating <= ?'); values.push(max_star_rating); }
+    if (min_price) { filters.push('rp.price >= ?'); values.push(min_price); }
+    if (max_price) { filters.push('rp.price <= ?'); values.push(max_price); }
+    if (has_breakfast !== undefined) { filters.push('rt.has_breakfast = ?'); values.push(has_breakfast); }
+    if (has_wifi !== undefined) { filters.push('rt.has_wifi = ?'); values.push(has_wifi); }
+    if (room_size_min) { filters.push('rt.room_size >= ?'); values.push(room_size_min); }
+    if (amenities) { filters.push('h.facilities LIKE ?'); values.push(`%${amenities}%`); }
     
-    if (city) { baseSql += ' AND h.city = ?'; values.push(city); }
-    if (province) { baseSql += ' AND h.province = ?'; values.push(province); }
-    if (kabupaten) { baseSql += ' AND h.kabupaten = ?'; values.push(kabupaten); }
-    if (postal_code) { baseSql += ' AND h.postal_code = ?'; values.push(postal_code); }
-    if (property_type) { baseSql += ' AND h.property_type = ?'; values.push(property_type); }
-    if (amenities) {
-      // amenities: comma-separated list, match any
-      const amenityList = amenities.split(',').map(a => a.trim()).filter(Boolean);
-      if (amenityList.length > 0) {
-        baseSql += ' AND (' + amenityList.map(() => 'h.facilities LIKE ?').join(' OR ') + ')';
-        values.push(...amenityList.map(a => `%${a}%`));
-      }
+    let whereClause = '';
+    if (filters.length > 0) {
+      whereClause = ' AND ' + filters.join(' AND ');
     }
-    if (min_star_rating) { baseSql += ' AND h.star_rating >= ?'; values.push(min_star_rating); }
-    if (max_star_rating) { baseSql += ' AND h.star_rating <= ?'; values.push(max_star_rating); }
-    if (min_price) { baseSql += ' AND rp.price >= ?'; values.push(min_price); }
-    if (max_price) { baseSql += ' AND rp.price <= ?'; values.push(max_price); }
-    if (has_breakfast !== undefined) { baseSql += ' AND rt.has_breakfast = ?'; values.push(has_breakfast); }
-    if (has_wifi !== undefined) { baseSql += ' AND rt.has_wifi = ?'; values.push(has_wifi); }
-    if (room_size_min) { baseSql += ' AND rt.room_size >= ?'; values.push(room_size_min); }
-    
-    // Add sorting
-    if (sort_by) {
-      const validSortColumns = ['name', 'star_rating', 'price', 'room_size'];
-      const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'name';
-      const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-      
-      if (sortColumn === 'price') {
-        baseSql += ` ORDER BY rp.${sortColumn} ${order}`;
-      } else if (sortColumn === 'room_size') {
-        baseSql += ` ORDER BY rt.${sortColumn} ${order}`;
-      } else {
-        baseSql += ` ORDER BY h.${sortColumn} ${order}`;
-      }
+    let sql = baseSql + whereClause;
+    // Sorting
+    const validSortColumns = ['name', 'star_rating', 'price', 'room_size'];
+    const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'name';
+    const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    if (sortColumn === 'price') {
+      sql += ` ORDER BY rp.${sortColumn} ${order}`;
+    } else if (sortColumn === 'room_size') {
+      sql += ` ORDER BY rt.${sortColumn} ${order}`;
     } else {
-      baseSql += ' ORDER BY h.name ASC';
+      sql += ` ORDER BY h.${sortColumn} ${order}`;
     }
-    
-    // Count total items for pagination metadata
-    // We need to use a modified version of the query for counting
+    // Pagination
+    const { sql: paginatedSql, values: paginationValues, pagination } = paginateQuery(sql, { page, limit });
+    const allValues = [...values, ...paginationValues];
+    // Build count query with same filters
     let countSql = `
       SELECT COUNT(DISTINCT h.id) as total
       FROM Hotels h
       LEFT JOIN RoomTypes rt ON h.id = rt.hotel_id
       LEFT JOIN RoomPricing rp ON rt.id = rp.room_type_id
-      WHERE 1=1
+      WHERE 1=1${whereClause}
     `;
-    
-    // Add the same WHERE conditions to the count query
-    if (city) { countSql += ' AND h.city = ?'; }
-    if (province) { countSql += ' AND h.province = ?'; }
-    if (property_type) { countSql += ' AND h.property_type = ?'; }
-    if (min_star_rating) { countSql += ' AND h.star_rating >= ?'; }
-    if (max_star_rating) { countSql += ' AND h.star_rating <= ?'; }
-    if (min_price) { countSql += ' AND rp.price >= ?'; }
-    if (max_price) { countSql += ' AND rp.price <= ?'; }
-    if (has_breakfast !== undefined) { countSql += ' AND rt.has_breakfast = ?'; }
-    if (has_wifi !== undefined) { countSql += ' AND rt.has_wifi = ?'; }
-    if (room_size_min) { countSql += ' AND rt.room_size >= ?'; }
-    
-    // Apply pagination
-    const { sql, values: paginationValues, pagination } = paginateQuery(baseSql, { page, limit });
-    const allValues = [...values, ...paginationValues];
-    
     // Execute count query first
     db.query(countSql, values, (countErr, countResults) => {
       if (countErr) return callback(countErr, null);
-      
       const totalItems = countResults[0].total;
-      
       // Then execute the paginated query
-      db.query(sql, allValues, (err, results) => {
+      db.query(paginatedSql, allValues, (err, results) => {
         if (err) return callback(err, null);
-        
         // Format the response with pagination metadata
         const response = paginatedResponse(results, pagination, totalItems);
         callback(null, response);

@@ -98,7 +98,7 @@ const Train = {
     if (max_duration) { baseSql += ' AND t.duration <= ?'; values.push(max_duration); }
     if (min_price) { baseSql += ' AND tp.price >= ?'; values.push(min_price); }
     if (max_price) { baseSql += ' AND tp.price <= ?'; values.push(max_price); }
-    if (departure_date) { baseSql += ' AND DATE(t.departure_time) = ?'; values.push(departure_date); }
+    if (departure_date) { baseSql += ' AND tp.date = ?'; values.push(departure_date); }
     
     // Add sorting
     if (sort_by && sort_order) {
@@ -127,17 +127,22 @@ const Train = {
     `;
     
     // Add the same WHERE conditions to the count query
-    if (origin_station) { countSql += ' AND t.origin_station = ?'; }
-    if (destination_station) { countSql += ' AND t.destination_station = ?'; }
+    if (origin_station_code) { countSql += ' AND t.origin_station_code = ?'; }
+    if (destination_station_code) { countSql += ' AND t.destination_station_code = ?'; }
     if (origin_city) { countSql += ' AND t.origin_city = ?'; }
     if (destination_city) { countSql += ' AND t.destination_city = ?'; }
+    if (origin_province) { countSql += ' AND t.origin_province = ?'; }
+    if (destination_province) { countSql += ' AND t.destination_province = ?'; }
+    if (subclass) { countSql += ' AND t.subclass = ?'; }
+    if (train_type) { countSql += ' AND t.train_type = ?'; }
+    if (price_category) { countSql += ' AND tp.price_category = ?'; }
     if (train_class) { countSql += ' AND t.train_class = ?'; }
     if (operator) { countSql += ' AND t.operator = ?'; }
     if (min_duration) { countSql += ' AND t.duration >= ?'; }
     if (max_duration) { countSql += ' AND t.duration <= ?'; }
     if (min_price) { countSql += ' AND tp.price >= ?'; }
     if (max_price) { countSql += ' AND tp.price <= ?'; }
-    if (departure_date) { countSql += ' AND DATE(t.departure_time) = ?'; }
+    if (departure_date) { countSql += ' AND tp.date = ?'; }
     
     // Apply pagination
     const { sql, values: paginationValues, pagination } = paginateQuery(baseSql, { page, limit });

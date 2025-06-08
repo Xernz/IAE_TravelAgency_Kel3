@@ -64,28 +64,41 @@ const Flight = {
   
   filter: (params, callback) => {
     const { 
-      origin_city, destination_city, origin_code, destination_code,
+      origin_city, destination_city,
       airline_code, airline_name, flight_class, departure_date,
       min_price, max_price, sort_by, sort_order, page, limit
     } = params;
     
-    let sql = `
-      SELECT f.*, fp.price, fp.currency 
-      FROM Flights f
-      LEFT JOIN FlightPricing fp ON f.id = fp.flight_id
-      WHERE 1=1
-    `;
+    let sql;
+    let values = [];
     
-    const values = [];
+    if (departure_date) {
+      // Join FlightAvailability for seats_available if filtering by date
+      sql = `
+        SELECT f.*, fp.price, fp.currency, fa.available_seats AS seats_available
+        FROM Flights f
+        LEFT JOIN FlightPricing fp ON f.id = fp.flight_id
+        LEFT JOIN FlightAvailability fa ON f.id = fa.flight_id AND fa.travel_date = ?
+        WHERE 1=1
+      `;
+      values.push(departure_date);
+    } else {
+      // Default: no join with FlightAvailability
+      sql = `
+        SELECT f.*, fp.price, fp.currency
+        FROM Flights f
+        LEFT JOIN FlightPricing fp ON f.id = fp.flight_id
+        WHERE 1=1
+      `;
+    }
     
-    if (origin_city) { sql += ' AND f.origin_city = ?'; values.push(origin_city); }
-    if (destination_city) { sql += ' AND f.destination_city = ?'; values.push(destination_city); }
-    if (origin_code) { sql += ' AND f.origin_code = ?'; values.push(origin_code); }
-    if (destination_code) { sql += ' AND f.destination_code = ?'; values.push(destination_code); }
+    // Filtering
+    if (origin_city) { sql += ' AND f.origin = ?'; values.push(origin_city); }
+    if (destination_city) { sql += ' AND f.destination = ?'; values.push(destination_city); }
     if (airline_code) { sql += ' AND f.airline_code = ?'; values.push(airline_code); }
     if (airline_name) { sql += ' AND f.airline_name LIKE ?'; values.push(`%${airline_name}%`); }
     if (flight_class) { sql += ' AND f.flight_class = ?'; values.push(flight_class); }
-    if (departure_date) { sql += ' AND DATE(f.departure_time) = ?'; values.push(departure_date); }
+    if (departure_date) { /* already handled above for join */ }
     if (min_price) { sql += ' AND fp.price >= ?'; values.push(min_price); }
     if (max_price) { sql += ' AND fp.price <= ?'; values.push(max_price); }
     

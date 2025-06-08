@@ -56,13 +56,14 @@ exports.listAllHotels = (req, res) => {
 
 exports.filterHotels = (req, res) => {
   const { 
-    city, province, property_type, min_star_rating, max_star_rating,
+    name, city, province, property_type, min_star_rating, max_star_rating,
     min_price, max_price, has_breakfast, has_wifi, room_size_min,
     sort_by, sort_order, page, limit
   } = req.query;
   
   // Convert string parameters to appropriate types
   const params = {
+    name,
     city, 
     province, 
     property_type,

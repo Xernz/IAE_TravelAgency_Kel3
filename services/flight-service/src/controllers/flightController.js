@@ -74,15 +74,23 @@ exports.filterFlights = (req, res) => {
     page,
     limit
   };
-  
-  Flight.filter(params, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
-    res.json({ 
-      status: 'success', 
-      data: result.data,
-      pagination: result.pagination 
+  console.log('filterFlights called with params:', params);
+  try {
+    Flight.filter(params, (err, result) => {
+      if (err) {
+        console.error('Error filtering flights:', err);
+        return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+      }
+      res.json({ 
+        status: 'success', 
+        data: result.data,
+        pagination: result.pagination 
+      });
     });
-  });
+  } catch (err) {
+    console.error('Unexpected error in filterFlights:', err);
+    return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+  }
 };
 
 exports.getFlightDetails = (req, res) => {

@@ -16,14 +16,22 @@ import {
   CircularProgress
 } from '@mui/material';
 import { useQuery } from '@apollo/client';
-import { GET_LOCAL_TRAVEL } from '../../services/graphqlQueries';
+import { FILTER_LOCAL_TRAVELS } from '../services/graphqlLocalTravelQueries';
 
 
 export default function LocalTravelList() {
+  // UI filter state uses short names; map to GraphQL variable names
   const initialFilters = {
-    origin: '',
-    destination: '',
-    date: ''
+    origin_city: '',
+    destination_city: '',
+    origin_province: '',
+    destination_province: '',
+    date: '',
+    type: '',
+    min_price: '',
+    max_price: '',
+    sort_by: 'name',
+    sort_order: 'ASC',
   };
 
   const [filters, setFilters] = React.useState(initialFilters);
@@ -31,23 +39,34 @@ export default function LocalTravelList() {
   const [itemsPerPage] = React.useState(10);
 
   // Apollo Client query for local travel
-  const { data, loading, error, refetch } = useQuery(GET_LOCAL_TRAVEL, {
+  const { data, loading, error } = useQuery(FILTER_LOCAL_TRAVELS, {
     variables: {
-      origin: filters.origin || undefined,
-      destination: filters.destination || undefined,
+      origin_city: filters.origin_city || undefined,
+      destination_city: filters.destination_city || undefined,
+      origin_province: filters.origin_province || undefined,
+      destination_province: filters.destination_province || undefined,
       date: filters.date || undefined,
+      type: filters.type || undefined,
+      min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+      max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+      sort_by: filters.sort_by || 'name',
+      sort_order: filters.sort_order || 'ASC',
+      page: currentPage,
+      limit: itemsPerPage,
     },
     fetchPolicy: 'cache-and-network'
   });
 
-  // Handle page change
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    refetch({ page });
+  // Handle page change (MUI Pagination typically provides event, value)
+  const handlePageChange = (event, value) => {
+    setCurrentPage(value);
+    // Data will refetch automatically as 'currentPage' in variables changes
   };
 
-  const localTravelData = data?.localTravel || [];
-  const pagination = data?.localTravel?.pagination || { current_page: currentPage, total_pages: 1 };
+  const localTravelData = data?.filterLocalTravels?.localTravels || [];
+  const paginationInfo = data?.filterLocalTravels?.pagination;
+  // Fallback for pagination if not provided by backend, to prevent errors
+  const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1 };
 
   // Helper: sort change
   const handleSortChange = (sortBy) => {
@@ -140,10 +159,10 @@ export default function LocalTravelList() {
                       {getTravelTypeIcon(item.type)}
                     </Box>
                   </TableCell>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.origin}</TableCell>
-                  <TableCell>{item.filters.destination}</TableCell>
-                  <TableCell>{item.vehicle_model}</TableCell>
+                  <TableCell>{item.name || item.provider || item.operator_name}</TableCell>
+                  <TableCell>{item.origin_city || item.origin_province || item.origin_kabupaten}</TableCell>
+                  <TableCell>{item.destination_city || item.destination_province || item.destination_kabupaten}</TableCell>
+                  <TableCell>{item.vehicle_model || item.type}</TableCell>
                   <TableCell>{formatPrice(item.price)}</TableCell>
                   <TableCell>
                     <Button 
@@ -170,12 +189,13 @@ export default function LocalTravelList() {
         </Table>
       </TableContainer>
       {/* Pagination */}
-      {pagination && pagination.total_pages > 1 && (
+      {currentPagination && currentPagination.total_pages > 1 && (
         <Box mt={4} display="flex" justifyContent="center">
           <Pagination
-            currentPage={pagination.current_page}
-            totalPages={pagination.total_pages}
-            onPageChange={handlePageChange}
+            count={currentPagination.total_pages} // MUI uses 'count' for total pages
+            page={currentPagination.current_page}  // MUI uses 'page' for current page
+            onChange={handlePageChange} // MUI onChange provides (event, value)
+            color="primary"
           />
         </Box>
       )}

@@ -13,13 +13,67 @@ const typeDefs = gql`
     arrival_time: String
     price: Float
     seats_available: Int
+    # Add other fields like flight_class if UI needs them and service provides them
   }
+
+  input FlightFiltersInput {
+    origin_city: String
+    destination_city: String
+    origin_code: String
+    destination_code: String
+    airline_code: String
+    airline_name: String
+    flight_class: String
+    departure_date: String # Consider GraphQL Date scalar if available/used elsewhere
+    min_price: Float
+    max_price: Float
+  }
+
+  enum SortOrder {
+    ASC
+    DESC
+  }
+
+  input FlightSortInput {
+    sortBy: String # e.g., "price", "departure_time"
+    sortOrder: SortOrder
+  }
+
+  input PaginationInput {
+    page: Int
+    limit: Int
+  }
+
+  type PaginationInfo {
+    totalItems: Int
+    totalPages: Int
+    currentPage: Int
+    pageSize: Int
+    hasNextPage: Boolean
+    hasPrevPage: Boolean
+  }
+
+  type FlightsPage {
+    flights: [Flight!]!
+    pagination: PaginationInfo
+  }
+
   type Query {
+    # Existing queries
     flights(origin: String, destination: String, date: String): [Flight]
     flight(id: ID!): Flight
+
+    # New filter query
+    filterFlights(
+      filters: FlightFiltersInput
+      sort: FlightSortInput
+      pagination: PaginationInput
+    ): FlightsPage
   }
+
   type Mutation {
     createFlight(airline: String!, flight_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Flight
+    # Add other mutations as needed
   }
 `;
 
@@ -40,8 +94,10 @@ const resolvers = {
       }
       const res = await fetch(url);
       const data = await res.json();
+      // Check if the primary data field is an array, common for list endpoints
+      const flightsData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.flights) ? data.data.flights : []);
       if (data.status !== 'success') return [];
-      return data.data.map(flight => ({
+      return flightsData.map(flight => ({
         id: flight.id,
         airline: flight.airline || null,
         flight_number: flight.flight_number || flight.flight_no || null,
@@ -56,8 +112,102 @@ const resolvers = {
     async flight(_, { id }) {
       const res = await fetch(`${FLIGHT_SERVICE_URL}/${id}`);
       const data = await res.json();
+      if (data.status !== 'success' || !data.data) return null;
+      const flight = data.data;
+      return {
+        id: flight.id,
+        airline: flight.airline_name || flight.airline_code || flight.airline || null,
+        flight_number: flight.flight_number || flight.flight_no || null,
+        origin: flight.origin_city || flight.origin_code || flight.origin || null,
+        destination: flight.destination_city || flight.destination_code || flight.destination || null,
+        departure_time: flight.departure_time || null,
+        arrival_time: flight.arrival_time || null,
+        price: flight.price || null,
+        seats_available: flight.seats_available || null,
+      };
+    },
+    async filterFlights(_, { filters, sort, pagination }) {
+      const FLIGHT_FILTER_URL = `${FLIGHT_SERVICE_URL}/filter`;
+      const queryParams = new URLSearchParams();
+
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== null && value !== undefined && String(value).trim() !== '') {
+            // Map GraphQL filter names to service API query param names if they differ
+            // For now, assuming they are the same as defined in FlightFiltersInput
+            queryParams.append(key, value);
+          }
+        });
+      }
+
+      if (sort) {
+        if (sort.sortBy) queryParams.append('sort_by', sort.sortBy);
+        if (sort.sortOrder) queryParams.append('sort_order', sort.sortOrder);
+      }
+
+      if (pagination) {
+        if (pagination.page) queryParams.append('page', pagination.page);
+        if (pagination.limit) queryParams.append('limit', pagination.limit);
+      }
+
+      const url = `${FLIGHT_FILTER_URL}?${queryParams.toString()}`;
+      console.log(`Fetching flights from: ${url}`); // For debugging
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Flight service request failed with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch flights from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          console.warn('Flight service did not return success or data:', serviceResponse);
+          return { flights: [], pagination: null };
+        }
+
+        const mappedFlights = serviceResponse.data.map(flight => ({
+          id: flight.id,
+          airline: flight.airline_name || flight.airline_code || flight.airline || null,
+          flight_number: flight.flight_number || flight.flight_no || null,
+          origin: flight.origin_city || flight.origin_code || flight.origin || null,
+          destination: flight.destination_city || flight.destination_code || flight.destination || null,
+          departure_time: flight.departure_time || null,
+          arrival_time: flight.arrival_time || null,
+          price: flight.price !== undefined ? parseFloat(flight.price) : null,
+          seats_available: flight.seats_available !== undefined && flight.seats_available !== null ? parseInt(flight.seats_available, 10) : null,
+        }));
+
+        const servicePagination = serviceResponse.pagination || {};
+        const currentPage = parseInt(servicePagination.current_page || servicePagination.page, 10) || 1;
+        const totalPages = parseInt(servicePagination.total_pages || servicePagination.pages, 10) || 0;
+        
+        const mappedPagination = {
+          totalItems: parseInt(servicePagination.total_items || servicePagination.total, 10) || 0,
+          totalPages: totalPages,
+          currentPage: currentPage,
+          pageSize: parseInt(servicePagination.per_page || servicePagination.limit, 10) || 0,
+          hasNextPage: currentPage < totalPages,
+          hasPrevPage: currentPage > 1,
+        };
+
+        return {
+          flights: mappedFlights,
+          pagination: mappedPagination,
+        };
+      } catch (error) {
+        console.error('Error in filterFlights resolver:', error);
+        // Depending on policy, you might want to throw the error or return a structured error response
+        throw new Error('An error occurred while fetching flights.');
+      }
+    },
+    async flight(_, { id }) {
+      const res = await fetch(`${FLIGHT_SERVICE_URL}/${id}`);
+      const data = await res.json();
       if (data.status !== 'success') return null;
       const flight = data.data;
+      if (!flight) return null; // Ensure flight data exists before mapping
       return {
         id: flight.id,
         airline: flight.airline || null,

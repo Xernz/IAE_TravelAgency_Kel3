@@ -67,6 +67,7 @@ const LocalTravel = {
       origin_kabupaten, destination_kabupaten, type, operator_name, provider,
       route, min_capacity, max_capacity, class_type,
       has_ac, has_wifi, min_price, max_price, sort_by, sort_order,
+      date,
       page, limit
     } = params;
     
@@ -95,8 +96,8 @@ const LocalTravel = {
     if (route) { baseSql += ' AND lt.route LIKE ?'; values.push(`%${route}%`); }
     if (min_capacity) { baseSql += ' AND lt.capacity >= ?'; values.push(min_capacity); }
     if (max_capacity) { baseSql += ' AND lt.capacity <= ?'; values.push(max_capacity); }
-    if (has_ac !== undefined) { baseSql += ' AND lt.features LIKE ?'; values.push(has_ac ? '%AC%' : '%'); }
-    if (has_wifi !== undefined) { baseSql += ' AND lt.features LIKE ?'; values.push(has_wifi ? '%WiFi%' : '%'); }
+    if (has_ac !== undefined) { baseSql += has_ac ? " AND lt.features LIKE '%AC%'" : " AND (lt.features NOT LIKE '%AC%' OR lt.features IS NULL)"; }
+    if (has_wifi !== undefined) { baseSql += has_wifi ? " AND lt.features LIKE '%WiFi%'" : " AND (lt.features NOT LIKE '%WiFi%' OR lt.features IS NULL)"; }
     if (min_price) { baseSql += ' AND ltp.price >= ?'; values.push(min_price); }
     if (max_price) { baseSql += ' AND ltp.price <= ?'; values.push(max_price); }
     
@@ -112,7 +113,7 @@ const LocalTravel = {
         baseSql += ` ORDER BY lt.${sortColumn} ${order}`;
       }
     } else {
-      baseSql += ' ORDER BY lt.type ASC, lt.provider_name ASC';
+      baseSql += ' ORDER BY lt.type ASC, lt.provider ASC';
     }
     
     // Count total items for pagination metadata
@@ -125,18 +126,22 @@ const LocalTravel = {
     `;
     
     // Add the same WHERE conditions to the count query
-    if (city) { countSql += ' AND lt.city = ?'; }
+    if (origin_city) { countSql += ' AND lt.origin_city = ?'; }
+    if (destination_city) { countSql += ' AND lt.destination_city = ?'; }
+    if (origin_province) { countSql += ' AND lt.origin_province = ?'; }
+    if (destination_province) { countSql += ' AND lt.destination_province = ?'; }
     if (type) { countSql += ' AND lt.type = ?'; }
-    if (provider_name) { countSql += ' AND lt.provider_name LIKE ?'; }
-    if (route) { countSql += ' AND lt.route LIKE ?'; }
+    if (operator_name) { countSql += ' AND lt.operator_name = ?'; }
+    if (provider) { countSql += ' AND lt.provider = ?'; }
+    if (route) { countSql += ' AND lt.route = ?'; }
     if (min_capacity) { countSql += ' AND lt.capacity >= ?'; }
     if (max_capacity) { countSql += ' AND lt.capacity <= ?'; }
-    if (has_ac !== undefined) { countSql += ' AND lt.features LIKE ?'; }
-    if (has_wifi !== undefined) { countSql += ' AND lt.features LIKE ?'; }
+    if (class_type) { countSql += ' AND ltp.class_type = ?'; }
+    if (has_ac !== undefined) { countSql += has_ac ? " AND lt.features LIKE '%AC%'" : " AND (lt.features NOT LIKE '%AC%' OR lt.features IS NULL)"; }
+    if (has_wifi !== undefined) { countSql += has_wifi ? " AND lt.features LIKE '%WiFi%'" : " AND (lt.features NOT LIKE '%WiFi%' OR lt.features IS NULL)"; }
     if (min_price) { countSql += ' AND ltp.price >= ?'; }
     if (max_price) { countSql += ' AND ltp.price <= ?'; }
-    
-    // Apply pagination
+    if (date !== undefined) { countSql += ' AND DATE(ltp.date) = ?'; }
     const { sql, values: paginationValues, pagination } = paginateQuery(baseSql, { page, limit });
     const allValues = [...values, ...paginationValues];
     

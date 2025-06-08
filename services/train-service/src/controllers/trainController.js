@@ -25,6 +25,7 @@ exports.listAllTrains = (req, res) => {
 };
 
 exports.filterTrains = (req, res) => {
+  console.log('Incoming /filter query:', req.query);
   const { 
     origin_station_code, destination_station_code, origin_city, destination_city,
     origin_province, destination_province, train_class, subclass, train_type,
@@ -59,10 +60,14 @@ exports.filterTrains = (req, res) => {
     page: page ? parseInt(page) : 1,
     limit: limit ? parseInt(limit) : 10
   };
+  console.log('Converted filter params:', params);
   
   Train.filter(params, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
-    
+    if (err) {
+      console.error('Train.filter error:', err);
+      return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    }
+
     // Return data and pagination metadata
     res.json({
       status: 'success',

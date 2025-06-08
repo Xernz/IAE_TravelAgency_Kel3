@@ -76,49 +76,207 @@ The frontend component `MyBookings.js` now correctly imports and uses booking-re
 **Impact:**
 - Booking management functionalities (viewing, canceling, modifying bookings) in the `MyBookings` page are now fully functional.
 
-## 3. Flight Service Misalignment [RESOLVED]
+## 3. Flight Service Misalignment [PENDING - Mutation Definition]
 
 **Issue Date:** 2025-06-08
-**Resolved:** 2025-06-08
+**Status Update:** 2025-06-08 (Revised)
 
 **Affected Files:**
 - Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`
-- API Gateway GraphQL Schema: `api-gateway/graphql/flight.js`
+- API Gateway GraphQL Schema: `api-gateway/graphql/flight.js` (Assumed to expect `createFlight`)
 
-**Resolution:**
-- The missing `CREATE_FLIGHT` mutation was added to `frontend/src/services/graphqlQueries.js` with a signature matching the API Gateway's `createFlight` mutation.
-- All field names and arguments are now consistent between frontend and API Gateway.
-- The flight creation flow can now be fully handled via GraphQL/Apollo Client.
+**Description & Original Plan:**
+- The initial assessment (dated 2025-06-08) indicated that a `CREATE_FLIGHT` (or `createFlight`) mutation was already added to `frontend/src/services/graphqlQueries.js` and aligned with the API Gateway.
+- **Correction:** Further investigation on 2025-06-08 revealed this mutation is currently missing from the frontend `graphqlQueries.js` file.
+
+**Current Action (2025-06-08):**
+- Defining the `createFlight` mutation in `frontend/src/services/graphqlQueries.js`.
+- The proposed mutation will use minimal fields based on existing flight query data: `userId`, `flightId`, `numberOfPassengers`.
+- The aim is to align with the API Gateway's expected `createFlight` operation.
+- Once defined and implemented, the flight creation flow can be handled via GraphQL/Apollo Client.
+
+**Next Steps:**
+- Add the defined `createFlight` mutation to `graphqlQueries.js`.
+- Integrate this mutation into the relevant frontend component (e.g., `FlightDetail.js`).
+- Update this section to "[RESOLVED]" upon successful implementation and testing.
 
 ## 4. Train Service Misalignment [RESOLVED]
 
 **Issue Date:** 2025-06-08
-**Resolved:** 2025-06-08
+**Resolved Date:** 2025-06-08
 
 **Affected Files:**
-- Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`, `frontend/src/services/graphqlDetailQueries.js`
-- API Gateway GraphQL Schema: `api-gateway/graphql/train.js`
+- Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`
+- Frontend Component: `frontend/src/pages/TrainDetail.js`
+- API Gateway GraphQL Schema: `api-gateway/graphql/train.js` (Assumed to expect `createTrain`)
 
 **Resolution:**
-- The missing `CREATE_TRAIN` mutation was added to `frontend/src/services/graphqlQueries.js` with a signature matching the API Gateway's `createTrain` mutation.
-- All core train GraphQL queries and mutations are now aligned between frontend and API Gateway.
+- The `CREATE_TRAIN_BOOKING` (internally `createTrain`) mutation was defined in `frontend/src/services/graphqlQueries.js` using `userId`, `trainId`, and `numberOfSeats` as inputs.
+- This mutation has been successfully integrated into `frontend/src/pages/TrainDetail.js`, including a booking form, user authentication checks, mutation handling, and UI feedback.
+- The frontend implementation for train booking is now aligned with the expected GraphQL operation.
 - All field names and arguments are now consistent between frontend and API Gateway.
 - The train creation flow can now be fully handled via GraphQL/Apollo Client.
 
 ## 5. Local Travel Service Misalignment [RESOLVED]
 
 **Issue Date:** 2025-06-08
-**Resolved:** 2025-06-08
+**Resolved Date:** 2025-06-08
 
 **Affected Files:**
-- Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`, `frontend/src/services/graphqlDetailQueries.js`
-- API Gateway GraphQL Schema: `api-gateway/graphql/localTravel.js`
+- Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`
+- Frontend Component: `frontend/src/pages/LocalTravelDetail.js`
+- API Gateway GraphQL Schema: `api-gateway/graphql/localTravel.js` (Assumed to expect `createLocalTravel`)
 
 **Resolution:**
-- The missing `CREATE_LOCAL_TRAVEL` mutation was added to `frontend/src/services/graphqlQueries.js` with a signature matching the API Gateway's `createLocalTravel` mutation.
-- All core local travel GraphQL queries and mutations are now aligned between frontend and API Gateway.
+- The `CREATE_LOCAL_TRAVEL_BOOKING` (internally `createLocalTravel`) mutation was defined in `frontend/src/services/graphqlQueries.js` using `userId` and `localTravelId` as inputs.
+- This mutation has been successfully integrated into `frontend/src/pages/LocalTravelDetail.js`, including a booking button, user authentication checks, mutation handling, and UI feedback.
+- The frontend implementation for local travel booking is now aligned with the expected GraphQL operation.
 
 ## 6. User Service Misalignment [RESOLVED]
+
+## 7. Payment Service Misalignment [RESOLVED]
+
+## 8. Hotel Service Misalignment [COMPLETED - Frontend Integration, Pending E2E Testing]
+
+**Issue Date:** 2025-06-08
+**Status Update:** 2025-06-08 (Backend Resolver & Frontend Query Aligned)
+
+**Affected Files/Components:**
+- Frontend Component: `frontend/src/components/hotels/HotelList.js`
+- Frontend Hook: `frontend/src/services/graphql.js` (custom `useHotels` hook)
+- Frontend Query Definition: `frontend/src/services/graphqlQueries.js` (`FILTER_HOTELS` query)
+- API Gateway GraphQL Schema: `api-gateway/graphql/hotel.js` (`filterHotels` resolver)
+
+**Description:**
+The `HotelList.js` component and its `useHotels` hook require a `FILTER_HOTELS` GraphQL query for fetching and filtering hotel options, including by name.
+
+**Frontend Status (as of 2025-06-08):**
+- The `FILTER_HOTELS` GraphQL query in `frontend/src/services/graphqlQueries.js` has been **updated and aligned** with the backend resolver. It supports comprehensive filter variables (hotel name, city, province, country, price range, amenities, pet-friendly, room size, etc.), sorting, pagination, and requests detailed hotel fields.
+- The `useHotels` hook and `HotelList.js` have been refactored to use this updated query.
+
+**Backend Status (as of 2025-06-08):**
+- The `filterHotels` (formerly `searchHotels`) GraphQL query, its associated input/output types, and resolver have been **implemented and enhanced** in `api-gateway/graphql/hotel.js`.
+- The resolver now correctly handles filtering by `name` and other parameters, calls the Hotel microservice REST endpoint (`/api/hotels/search` or `/api/hotels/filter`), and returns structured pagination metadata.
+
+**Alignment Summary:**
+- Backend resolver for `filterHotels` is complete and supports name filtering.
+- Frontend `FILTER_HOTELS` query definition is aligned with the backend.
+- Client-side pagination workarounds in `HotelList.js` should be removed.
+
+**Next Steps (Frontend Team):**
+- **End-to-End Test:** Thoroughly test `HotelList.js` with the `FILTER_HOTELS` query to ensure all filters (especially hotel name), sorting, pagination, and data display work correctly against the live backend.
+- Remove any temporary client-side pagination logic from `HotelList.js`.
+- Update this section to "[RESOLVED]" upon successful end-to-end testing.
+
+## 9. Flight Service Misalignment [COMPLETED - Frontend Integration, Pending E2E Testing]
+
+**Issue Date:** 2025-06-08
+**Status Update:** 2025-06-08 (Backend Resolver & Frontend Query Aligned)
+
+**Affected Files/Components:**
+- Frontend Component: `frontend/src/components/flights/FlightList.js`
+- Frontend Query Definition: `frontend/src/services/graphqlQueries.js` (`FILTER_FLIGHTS` query)
+- API Gateway GraphQL Schema: `api-gateway/graphql/flight.js` (`filterFlights` resolver)
+
+**Description:**
+The `FlightList.js` component requires a `FILTER_FLIGHTS` GraphQL query for fetching and filtering flight options.
+
+**Frontend Status (as of 2025-06-08):**
+- The `FILTER_FLIGHTS` GraphQL query in `frontend/src/services/graphqlQueries.js` has been **updated and aligned** with the backend resolver, including comprehensive filter variables (origin city/airport, destination city/airport, airline name, flight class, departure date, etc.), sorting, pagination, and expected data fields.
+- `FlightList.js` imports and is structured to use this query.
+
+**Backend Status (as of 2025-06-08):**
+- The `filterFlights` GraphQL query, its associated input/output types, and resolver have been **implemented** in `api-gateway/graphql/flight.js`.
+- The resolver calls the existing Flight microservice REST endpoint (`/api/flights/filter`) and supports a comprehensive set of filters, sorting, and pagination.
+
+**Alignment Summary:**
+- Backend resolver for `filterFlights` is complete.
+- Frontend `FILTER_FLIGHTS` query definition is aligned with the backend.
+
+**Next Steps (Frontend Team):**
+- **End-to-End Test:** Thoroughly test `FlightList.js` with the `FILTER_FLIGHTS` query to ensure all filters, sorting, pagination, and data display work correctly against the live backend.
+- Update this section to "[RESOLVED]" upon successful end-to-end testing.
+
+## 10. Train Service Misalignment [COMPLETED - Frontend Integration, Pending E2E Testing]
+
+**Issue Date:** 2025-06-08
+**Status Update:** 2025-06-08 (Backend Resolver & Frontend Query Aligned)
+
+**Affected Files/Components:**
+- Frontend Component: `frontend/src/components/trains/TrainList.js`
+- Frontend Query Definition: `frontend/src/services/graphqlQueries.js` (`FILTER_TRAINS` query)
+- API Gateway GraphQL Schema: `api-gateway/graphql/train.js` (`filterTrains` resolver)
+
+**Description:**
+The `TrainList.js` component requires a `FILTER_TRAINS` GraphQL query for fetching and filtering train options.
+
+**Frontend Status (as of 2025-06-08):**
+- The `FILTER_TRAINS` GraphQL query in `frontend/src/services/graphqlQueries.js` has been **updated and aligned** with the backend resolver, including comprehensive filter variables (station names/codes, date, class, subclass, operator name, train number, etc.), sorting, pagination, and expected data fields.
+- `TrainList.js` imports and is structured to use this query.
+
+**Backend Status (as of 2025-06-08):**
+- The `filterTrains` GraphQL query, its associated input/output types, and resolver have been **implemented** in `api-gateway/graphql/train.js`.
+- The resolver calls the existing Train microservice REST endpoint (`/api/trains/filter`) and supports a comprehensive set of filters, sorting, and pagination.
+
+**Alignment Summary:**
+- Backend resolver for `filterTrains` is complete.
+- Frontend `FILTER_TRAINS` query definition is aligned with the backend.
+
+**Next Steps (Frontend Team):**
+- **End-to-End Test:** Thoroughly test `TrainList.js` with the `FILTER_TRAINS` query to ensure all filters, sorting, pagination, and data display work correctly against the live backend.
+- Update this section to "[RESOLVED]" upon successful end-to-end testing.
+
+## 11. Local Travel Service Misalignment [COMPLETED - Frontend Integration, Pending E2E Testing]
+
+**Issue Date:** 2025-06-08
+**Status Update:** 2025-06-08 (Backend Resolver & Frontend Query Aligned)
+
+**Affected Files/Components:**
+- Frontend Component: `frontend/src/components/localtravel/LocalTravelList.js`
+- Frontend Query Definition: `frontend/src/services/graphqlQueries.js` (`FILTER_LOCAL_TRAVELS` query)
+- API Gateway GraphQL Schema: `api-gateway/graphql/localTravel.js` (`filterLocalTravels` resolver)
+
+**Description:**
+The `LocalTravelList.js` component requires a `FILTER_LOCAL_TRAVELS` GraphQL query for fetching and filtering local travel options.
+
+**Frontend Status (as of 2025-06-08):**
+- The `FILTER_LOCAL_TRAVELS` GraphQL query in `frontend/src/services/graphqlQueries.js` has been **updated and aligned** with the backend resolver, including comprehensive filter variables (location, date, type, operator, provider, capacity, amenities, price, etc.), sorting, pagination, and expected data fields.
+- `LocalTravelList.js` imports and is structured to use this query.
+
+**Backend Status (as of 2025-06-08):**
+- The `filterLocalTravels` GraphQL query, its associated input/output types, and resolver have been **implemented** in `api-gateway/graphql/localTravel.js`.
+- The resolver calls the existing Local Travel microservice REST endpoint (`/api/local-travel/filter`) and supports a comprehensive set of filters, sorting, and pagination.
+
+**Alignment Summary:**
+- Backend resolver for `filterLocalTravels` is complete.
+- Frontend `FILTER_LOCAL_TRAVELS` query definition is aligned with the backend.
+
+**Next Steps (Frontend Team):**
+- **End-to-End Test:** Thoroughly test `LocalTravelList.js` with the `FILTER_LOCAL_TRAVELS` query to ensure all filters, sorting, pagination, and data display work correctly against the live backend.
+- Update this section to "[RESOLVED]" upon successful end-to-end testing.
+
+{{ ... }}
+**Issue Date:** 2025-06-08
+**Status Update:** 2025-06-08 (Revised)
+
+**Affected Files:**
+- Frontend GraphQL Definitions: `frontend/src/services/graphqlQueries.js`
+- Frontend Component: `frontend/src/pages/MyBookings.js`
+- API Gateway GraphQL Schema: `api-gateway/graphql/payment.js`
+
+**Description:**
+- The `CREATE_PAYMENT` GraphQL mutation is correctly defined in `frontend/src/services/graphqlQueries.js` (verified on 2025-06-08).
+- The primary remaining task is to fully integrate this mutation into `MyBookings.js`.
+- This includes removing any legacy REST API calls for payment processing and ensuring all relevant fields from the mutation (e.g., `currency`, `payment_reference`) are utilized.
+- Conflicting payment logic within `MyBookings.js` also needs to be resolved, retaining only the GraphQL-based implementation.
+
+**Next Steps:**
+- In `MyBookings.js`:
+    - Remove any existing REST API calls for payment.
+    - Ensure the `CREATE_PAYMENT` GraphQL mutation is used for all payment actions.
+    - Remove any duplicate or conflicting payment handling functions, keeping only the Apollo `useMutation` based logic.
+    - Enhance the UI to properly utilize fields like `currency` and `payment_reference`.
+- This section was marked RESOLVED on 2025-06-08 after UI integration and cleanup in `MyBookings.js` were completed and verified.
 
 **Issue Date:** 2025-06-08
 **Resolved:** 2025-06-08

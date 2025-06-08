@@ -1,6 +1,10 @@
 -- Flight Service Database Schema (Consumer Only)
 USE travel_flight_db;
 
+DROP TABLE IF EXISTS FlightPricing;
+DROP TABLE IF EXISTS FlightAvailability;
+DROP TABLE IF EXISTS Flights;
+
 CREATE TABLE IF NOT EXISTS Flights (
     id INT AUTO_INCREMENT PRIMARY KEY,
     flight_number VARCHAR(20) NOT NULL,
