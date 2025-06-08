@@ -27,7 +27,7 @@ const typeDefs = gql`
     createBooking(userId: ID!, items: [BookingItemInput!]!): Booking
     cancelBooking(bookingId: ID!): Boolean
     modifyBooking(bookingId: ID!, items: [BookingItemInput!]!): Booking
-    initiatePayment(userId: ID!, bookingId: ID!, amount: Float!, method: String!): PaymentResponse!
+
   }
   type PaymentResponse {
     status: String!
@@ -94,27 +94,6 @@ const resolvers = {
       const data = await res.json();
       if (data.status !== 'success') return null;
       return data.data;
-    },
-    async initiatePayment(_, { userId, bookingId, amount, method }) {
-      try {
-        const response = await fetch(PAYMENT_SERVICE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId, bookingId, amount, method })
-        });
-        const data = await response.json();
-        return {
-          status: data.status,
-          paymentId: data.paymentId,
-          message: data.message || (data.status === 'success' ? 'Payment initiated' : 'Failed')
-        };
-      } catch (err) {
-        return {
-          status: 'error',
-          paymentId: null,
-          message: 'Failed to connect to payment service'
-        };
-      }
     }
   }
 };

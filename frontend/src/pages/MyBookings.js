@@ -1,6 +1,6 @@
 import React, { useState, useContext } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_MY_BOOKINGS, CANCEL_BOOKING, MODIFY_BOOKING, INITIATE_PAYMENT } from '../services/graphqlQueries';
+import { GET_MY_BOOKINGS, CANCEL_BOOKING, MODIFY_BOOKING, CREATE_PAYMENT } from '../services/graphqlQueries';
 import { Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField } from '@mui/material';
 import { SnackbarContext } from '../App';
 
@@ -8,7 +8,8 @@ export default function MyBookings() {
   const { loading, error, data, refetch } = useQuery(GET_MY_BOOKINGS);
   const [cancelBooking] = useMutation(CANCEL_BOOKING);
   const [modifyBooking] = useMutation(MODIFY_BOOKING);
-  const [initiatePayment, { loading: payLoading }] = useMutation(INITIATE_PAYMENT);
+  // Payment mutation aligned with API Gateway
+const [createPayment, { loading: payLoading }] = useMutation(CREATE_PAYMENT);
   const { showSnackbar } = React.useContext(SnackbarContext);
 
   const handleCancel = async (bookingId) => {
@@ -44,15 +45,19 @@ export default function MyBookings() {
     setOpenPay(true);
   };
 
+  // Define the handlePay function to handle the payment
   const handlePay = async () => {
     if (!payBooking) return;
     try {
-      await initiatePayment({
+      // Use the createPayment mutation to create a payment
+      await createPayment({
         variables: {
           userId: payBooking.user_id,
           bookingId: payBooking.id,
           amount: parseFloat(payAmount),
-          method: payMethod
+          currency: undefined, // Add currency if applicable
+          payment_method_type: payMethod,
+          payment_reference: undefined // Add payment_reference if needed
         }
       });
       showSnackbar('Pembayaran berhasil!', 'success');

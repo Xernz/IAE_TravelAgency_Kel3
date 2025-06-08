@@ -9,30 +9,23 @@ import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper
 import formatIDR from '../../utils/formatIDR';
 
 export default function FlightList() {
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
+
   const [filters, setFilters] = useState({
     origin: '',
     destination: '',
     airline: '',
     min_price: '',
-    max_price: ''
+    max_price: '',
+    date: ''
   });
 
   // GraphQL query
   const { data, loading, error, refetch } = useQuery(GET_FLIGHTS, {
     variables: {
-      page: currentPage,
-      limit: itemsPerPage,
-      filters: {
-        origin: filters.origin || undefined,
-        destination: filters.destination || undefined,
-        airline: filters.airline || undefined,
-        min_price: filters.min_price ? parseInt(filters.min_price) : undefined,
-        max_price: filters.max_price ? parseInt(filters.max_price) : undefined
-      }
-    },
-    fetchPolicy: 'cache-and-network'
+      origin: filters.origin || undefined,
+      destination: filters.destination || undefined,
+      date: filters.date || undefined,
+    }
   });
 
   // Handle filter changes
@@ -44,21 +37,13 @@ export default function FlightList() {
   // Handle filter submit
   const handleFilterSubmit = (e) => {
     e.preventDefault();
-    setCurrentPage(1);
     refetch();
   };
 
-  // Handle page change
-  const handlePageChange = (page) => {
-    setCurrentPage(page);
-    refetch({ page });
-  };
+
 
   const flights = data?.flights || [];
-  const pagination = {
-    current_page: currentPage,
-    total_pages:  data?.flights && data.flights.length === itemsPerPage ? currentPage + 1 : currentPage
-  };
+
 
   return (
     <Box p={2}>
@@ -152,14 +137,7 @@ export default function FlightList() {
           </Table>
         </TableContainer>
       )}
-      {/* Pagination */}
-      <Box mt={2} display="flex" justifyContent="center">
-        <Pagination
-          currentPage={pagination.current_page}
-          totalPages={pagination.total_pages}
-          onPageChange={handlePageChange}
-        />
-      </Box>
+
     </Box>
   );
 }

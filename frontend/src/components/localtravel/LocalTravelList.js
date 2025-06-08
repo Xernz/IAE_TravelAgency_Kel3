@@ -21,17 +21,9 @@ import { GET_LOCAL_TRAVEL } from '../../services/graphqlQueries';
 
 export default function LocalTravelList() {
   const initialFilters = {
-    province: '',
-    city: '',
-    district: '',
-    type: '',
-    min_price: '',
-    max_price: '',
-    has_ac: false,
-    has_wifi: false,
-    service_category: '',
-    sort_by: 'name',
-    sort_order: 'ASC',
+    origin: '',
+    destination: '',
+    date: ''
   };
 
   const [filters, setFilters] = React.useState(initialFilters);
@@ -41,13 +33,9 @@ export default function LocalTravelList() {
   // Apollo Client query for local travel
   const { data, loading, error, refetch } = useQuery(GET_LOCAL_TRAVEL, {
     variables: {
-      page: currentPage,
-      limit: itemsPerPage,
-      filters: {
-        ...filters,
-        min_price: filters.min_price ? parseInt(filters.min_price) : undefined,
-        max_price: filters.max_price ? parseInt(filters.max_price) : undefined
-      }
+      origin: filters.origin || undefined,
+      destination: filters.destination || undefined,
+      date: filters.date || undefined,
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -154,7 +142,7 @@ export default function LocalTravelList() {
                   </TableCell>
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.origin}</TableCell>
-                  <TableCell>{item.destination}</TableCell>
+                  <TableCell>{item.filters.destination}</TableCell>
                   <TableCell>{item.vehicle_model}</TableCell>
                   <TableCell>{formatPrice(item.price)}</TableCell>
                   <TableCell>

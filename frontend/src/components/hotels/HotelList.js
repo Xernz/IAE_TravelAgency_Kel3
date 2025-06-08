@@ -31,24 +31,8 @@ export default function HotelList() {
   ];
   
   const initialFilters = {
-    name: '',
     city: '',
-    province: '',
-    kabupaten: '',
-    postal_code: '',
-    local_area: '',
-    accommodation_type: '',
-    star_rating: '',
-    min_price: '',
-    max_price: '',
-    has_wifi: false,
-    has_pool: false,
-    has_parking: false,
-    has_restaurant: false,
-    has_ac: false,
-    has_breakfast: false,
-    sort_by: 'name',
-    sort_order: 'ASC',
+    province: ''
   };
 
   const [filters, setFilters] = useState(initialFilters);
@@ -58,13 +42,8 @@ export default function HotelList() {
   // Apollo Client query for hotels
   const { data, loading, error, refetch } = useQuery(GET_HOTELS, {
     variables: {
-      page: currentPage,
-      limit: itemsPerPage,
-      filters: {
-        ...filters,
-        min_price: filters.min_price ? parseInt(filters.min_price) : undefined,
-        max_price: filters.max_price ? parseInt(filters.max_price) : undefined
-      }
+      city: filters.city || undefined,
+      province: filters.province || undefined,
     },
     fetchPolicy: 'cache-and-network'
   });

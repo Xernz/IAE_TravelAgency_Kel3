@@ -29,13 +29,21 @@ const trainTypes = [
 
 export default function TrainList() {
   const initialFilters = {
+    origin: '',
+    destination: '',
+    date: '',
     origin_province: '',
     destination_province: '',
-    departure_date: '',
+    origin_city: '',
+    destination_city: '',
+    origin_station: '',
+    destination_station: '',
+    train_class: '',
+    subclass: '',
+    train_type: '',
+    operator: '',
     min_price: '',
     max_price: '',
-    train_type: '',
-    subclass: '',
     price_category: '',
     sort_by: 'departure_time',
     sort_order: 'ASC'
@@ -48,13 +56,9 @@ export default function TrainList() {
   // Apollo Client query for trains
   const { data, loading, error, refetch } = useQuery(GET_TRAINS, {
     variables: {
-      page: currentPage,
-      limit: itemsPerPage,
-      filters: {
-        ...filters,
-        min_price: filters.min_price ? parseInt(filters.min_price) : undefined,
-        max_price: filters.max_price ? parseInt(filters.max_price) : undefined
-      }
+      origin: filters.origin || undefined,
+      destination: filters.destination || undefined,
+      date: filters.date || undefined,
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -132,12 +136,12 @@ export default function TrainList() {
             </select>
           </div>
           <div className="filter-group">
-            <label htmlFor="departure_date">Tanggal Keberangkatan:</label>
+            <label htmlFor="date">Tanggal Keberangkatan:</label>
             <input
               type="date"
-              id="departure_date"
-              name="departure_date"
-              value={filters.departure_date}
+              id="date"
+              name="date"
+              value={filters.date}
               onChange={handleFilterChange}
             />
           </div>
@@ -267,35 +271,6 @@ export default function TrainList() {
             />
           </div>
         </div>
-        <div className="filter-actions">
-          <button type="submit" className="btn-primary">Cari Kereta</button>
-          <button 
-            type="button" 
-            className="btn-secondary"
-            onClick={() => {
-              setFilters({
-                origin_city: '',
-                destination_city: '',
-                origin_province: '',
-                destination_province: '',
-                origin_station: '',
-                destination_station: '',
-                train_class: '',
-                subclass: '',
-                train_type: '',
-                operator: '',
-                departure_date: '',
-                min_price: '',
-                max_price: '',
-                price_category: '',
-                sort_by: 'departure_time',
-                sort_order: 'ASC'
-              });
-            }}
-          >
-            Reset Filter
-          </button>
-        </div>
       </form>
       <TableContainer component={Paper} elevation={2} sx={{ mt: 4 }}>
         <Table size="small" aria-label="Daftar Kereta Api">
@@ -316,7 +291,7 @@ export default function TrainList() {
                   <TableCell>{item.name}</TableCell>
                   <TableCell>{item.origin}</TableCell>
                   <TableCell>{item.destination}</TableCell>
-                  <TableCell>{item.departure_date}</TableCell>
+                  <TableCell>{item.date}</TableCell>
                   <TableCell>{formatIDR(item.price)}</TableCell>
                   <TableCell>
                     <Button variant="outlined" size="small" color="primary">Pesan</Button>
@@ -343,4 +318,5 @@ export default function TrainList() {
         </Box>
       )}
     </Box>
-  );}
+  );
+}

@@ -15,7 +15,7 @@ const typeDefs = gql`
     seats_available: Int
   }
   type Query {
-    flights: [Flight]
+    flights(origin: String, destination: String, date: String): [Flight]
     flight(id: ID!): Flight
   }
   type Mutation {
@@ -27,8 +27,18 @@ const FLIGHT_SERVICE_URL = 'http://localhost:3002/api/flights';
 
 const resolvers = {
   Query: {
-    async flights() {
-      const res = await fetch(FLIGHT_SERVICE_URL);
+    async flights(_, args) {
+      let url = FLIGHT_SERVICE_URL;
+      // If any filter params are provided, build a query string
+      const params = [];
+      if (args.origin) params.push(`origin=${encodeURIComponent(args.origin)}`);
+      if (args.destination) params.push(`destination=${encodeURIComponent(args.destination)}`);
+      if (args.date) params.push(`date=${encodeURIComponent(args.date)}`);
+      if (params.length > 0) {
+        // Use /filter endpoint if available, otherwise append as query params
+        url += '/filter?' + params.join('&');
+      }
+      const res = await fetch(url);
       const data = await res.json();
       if (data.status !== 'success') return [];
       return data.data.map(flight => ({
