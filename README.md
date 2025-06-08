@@ -1,63 +1,77 @@
-# Travel Agency Microservices Demo
+# Travel Agency Microservices System
 
 ## 1. Overview
 
-This project is a demonstration of a microservices-based system for a travel agency. It features a set of interconnected services that handle bookings, flights, and hotel reservations. The system is designed with direct service-to-service communication using HTTP and JSON, without a central API Gateway for internal calls, though a `Consumer Interface Backend` serves as an entry point for client applications.
+This project demonstrates a modern, scalable travel agency platform using a microservices architecture. The system consists of seven independently deployed services (Users, Payment, Booking, Flight, Local Travel, Hotel, Train), an API Gateway with GraphQL aggregation, and a React-based frontend using Apollo Client. The architecture supports robust travel management, including user authentication, booking, payments, and travel inventory, with a focus on modularity and extensibility.
+
+For a detailed, phase-by-phase development plan, see [`project_task.md`](./project_task.md).
 
 ## 2. System Architecture
 
-The system comprises the following core microservices:
+The architecture is composed of the following microservices and components:
 
-*   **Booking Service:** Manages the creation, retrieval, update, and deletion of travel bookings.
-*   **Flight Service:** Manages flight information, availability, and pricing.
-*   **Hotel Service:** Manages hotel information, room availability, and pricing.
-*   **Consumer Interface Backend:** Provides a unified API for client applications (e.g., a frontend UI) to interact with the system. It aggregates data from the underlying microservices.
+- **Users Service:** Handles user registration, authentication, and profile management.
+- **Payment Service:** Processes and records payments for bookings (integrated via GraphQL mutations).
+- **Booking Service:** Manages travel bookings, including creation, updates, cancellations, and inventory coordination.
+- **Flight Service:** Manages flight schedules, availability, and pricing.
+- **Hotel Service:** Manages hotel listings, room availability, and pricing.
+- **Train Service:** Manages train schedules, seat availability, and pricing.
+- **Local Travel Service:** Handles local transportation options (e.g., car rentals, transfers).
+- **API Gateway:** Serves as the single entry point for frontend clients. Aggregates all microservices via GraphQL, providing a unified schema and endpoint. Handles authentication, routing, and data federation.
+- **Frontend (React):** User interface built with React and Material-UI, using Apollo Client for GraphQL communication.
 
-### 2.1. Service Communication
+### 2.1. Communication & Patterns
 
-Services communicate directly with each other via RESTful APIs over HTTP, exchanging data in JSON format.
+- **Internal Service-to-Service:** RESTful APIs using HTTP/JSON for inter-service communication (future: event-driven enhancements possible).
+- **API Gateway:** All client requests go through the API Gateway, which exposes a GraphQL schema federating all microservices.
+- **Frontend:** Connects to the API Gateway via Apollo Client, using GraphQL queries and mutations for all data operations (including payments).
 
-*   **Booking Service** calls:
-    *   `Flight Service`: To get flight details, check availability, get pricing, and manage seat inventory (decrement/increment seats upon booking creation/deletion).
-    *   `Hotel Service`: To get hotel details, check room availability, get pricing, and manage room inventory (decrement/increment rooms upon booking creation/deletion).
-*   **Flight Service** calls:
-    *   `Booking Service`: To retrieve bookings associated with a specific flight (e.g., to check booking status for a flight segment).
-*   **Hotel Service** calls:
-    *   `Booking Service`: To retrieve bookings associated with a specific hotel room (e.g., to check booking status for a room).
-*   **Consumer Interface Backend** calls:
-    *   `Booking Service`: For all booking-related operations (CRUD).
-    *   `Flight Service`: To list and search flights.
-    *   `Hotel Service`: To list and search hotels.
-
-A textual representation of the communication flow:
+#### Architecture Diagram (Textual)
 
 ```
-[Client Application]
-   |
-   v
-[Consumer Interface Backend]
-   |  \
-   |   [Booking Service] <------> [Flight Service]
-   |      |
-   |      v
-   +----->[Hotel Service] <------+
+[Client (React/Apollo)]
+        |
+        v
+   [API Gateway (GraphQL)]
+    |    |    |    |    |    |    |
+    v    v    v    v    v    v    v
+[Users][Payment][Booking][Flight][Hotel][Train][LocalTravel]
 ```
 
-## 3. Services and API Overview
+- All microservices are independently deployable and scalable.
+- The API Gateway centralizes authentication, request routing, and data aggregation.
+- The frontend is fully migrated to GraphQL (REST endpoints are being deprecated).
 
-Detailed API specifications can be found in `project_guide/api_spec.md`.
+## 3. Microservices Overview
 
-### 3.1. Booking Service
+See [`project_guide/api_spec.md`](./project_guide/api_spec.md) for detailed API and GraphQL schema documentation.
 
-*   **Base URL:** `/bookings`
-*   **Description:** Manages all aspects of travel bookings.
-*   **Key Endpoints:**
-    *   `GET /bookings`: List all bookings.
-    *   `POST /bookings`: Create a new booking (handles inventory updates with Flight/Hotel services).
-    *   `GET /bookings/{id}`: Retrieve a specific booking.
-    *   `PUT /bookings/{id}`: Update a booking.
-    *   `DELETE /bookings/{id}`: Delete a booking (handles inventory updates).
-    *   `POST /bookings/{id}/cancel`: Cancel a booking.
+**Users Service**
+- User registration, login, JWT authentication, profiles.
+
+**Payment Service**
+- Payment processing, transaction history, integration with Booking and GraphQL mutations.
+
+**Booking Service**
+- Booking CRUD, inventory management (calls Flight, Hotel, Train, Local Travel services as needed).
+
+**Flight Service**
+- Flight schedules, seat inventory, pricing.
+
+**Hotel Service**
+- Hotel listings, room inventory, pricing.
+
+**Train Service**
+- Train schedules, seat inventory, pricing.
+
+**Local Travel Service**
+- Local transportation options, availability, and pricing.
+
+**API Gateway**
+- GraphQL endpoint federating all services, central authentication, request aggregation.
+
+**Frontend**
+- React + Material-UI, Apollo Client for GraphQL, fully decoupled from backend implementation details.
 
 ### 3.2. Flight Service
 
@@ -104,46 +118,121 @@ Detailed API specifications can be found in `project_guide/api_spec.md`.
 
 ## 5. Setup and Running
 
-*(Placeholder: Instructions on how to set up the development environment, install dependencies, configure services (e.g., database connections, port numbers), and run each service will be added here.)*
+## 4. Development & Deployment
 
-To run this project:
+See [`project_task.md`](./project_task.md) for the current phased plan and setup instructions.
 
-1.  **Prerequisites:**
-    *   Node.js (specify version if known)
-    *   npm or yarn
-    *   MySQL server
-2.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd travel-agency-system2
-    ```
-3.  **Configure each service:**
-    *   Navigate to each service directory (`booking-service`, `flight-service`, `hotel-service`, `consumer-interface`).
-    *   Create a `.env` file based on `.env.example` (if available) and configure database connections, ports, and other service URLs.
-4.  **Install dependencies for each service:**
-    ```bash
-    cd <service-directory>
-    npm install
-    # or yarn install
-    cd ..
-    ```
-    (Repeat for all services)
-5.  **Set up databases:**
-    *   Ensure your MySQL server is running.
-    *   Create the necessary databases and tables for each service. (Refer to individual service documentation or migration scripts if available).
-6.  **Run each service:**
-    ```bash
-    cd <service-directory>
-    npm start
-    # or yarn start
-    cd ..
-    ```
-    (Repeat for all services, preferably in separate terminal windows)
+- Each microservice runs independently (see individual service README or package.json for scripts).
+- API Gateway must be started before the frontend.
+- Frontend: install dependencies and run using standard React scripts.
+- Environment configuration (ports, DB URLs, secrets) is managed via `.env` files in each service.
 
-## 6. API Documentation
+## 5. Technology Stack
+
+- **Backend:** Node.js, Express, Apollo Server (GraphQL), REST (internal)
+- **Frontend:** React, Material-UI, Apollo Client
+- **Database:** Each service manages its own DB (MongoDB, PostgreSQL, or SQLite as appropriate)
+- **Authentication:** JWT (handled by Users Service and API Gateway)
+
+---
+
+For the complete list of actionable tasks, see [`project_task.md`](./project_task.md).
+For API details, see [`project_guide/api_spec.md`](./project_guide/api_spec.md).
+
+A modern, scalable travel agency platform built with Node.js microservices, an API Gateway, and a React/Material-UI frontend. Supports booking, payments, user management, and travel search (flights, hotels, trains, local travel).
+
+## Features
+- User registration, authentication, and profile management
+- Search and book flights, hotels, trains, and local travel
+- Booking management (create, modify, cancel)
+- Integrated payment workflows
+- Responsive React/Material-UI frontend
+- API Gateway for unified access and orchestration
+- Structured logging, monitoring, and error handling
+
+## Architecture
+```
+Frontend (React) ⇄ API Gateway ⇄ [Users | Booking | Payment | Flight | Hotel | Train | Local Travel]
+```
+- All cross-service and frontend-service communication is routed through the API Gateway for security, aggregation, and monitoring.
+- Each microservice is independently deployable and exposes REST (OpenAPI) or GraphQL (SDL) APIs.
+
+## Tech Stack
+- **Frontend:** React 19, Material-UI, React Router
+- **API Gateway:** Node.js, Express, Apollo Server (GraphQL), REST Proxy
+- **Microservices:** Node.js, Express, MySQL, REST/GraphQL
+- **Database:** MySQL (per service)
+- **Other:** Winston (logging), Docker (recommended for deployment)
+
+## Directory Structure
+```
+services/
+  users-service/
+  booking-service/
+  payment-service/
+  flight-service/
+  hotel-service/
+  train-service/
+  local-travel-service/
+frontend/
+project_guide/
+  api_docs/
+  user_guide.md
+  communication-flow.md
+  logging_monitoring_error_handling.md
+```
+
+## Getting Started
+### Prerequisites
+- Node.js (v18+ recommended)
+- npm or yarn
+- MySQL server
+
+### Configure Environment
+- Each service has a `.env.example`. Copy to `.env` and set DB credentials, ports, etc.
+- Example:
+  ```bash
+  cd services/users-service
+  cp .env.example .env
+  # Edit .env as needed
+  ```
+
+### Install Dependencies
+```bash
+cd services/<service-name>
+npm install
+# or yarn install
+```
+Repeat for all services and `frontend/`.
+
+### Set Up Databases
+- Ensure MySQL is running.
+- Create databases and tables as per each service's docs or migration scripts.
+
+### Run Services
+```bash
+cd services/<service-name>
+npm start
+```
+Repeat for all services. Start the API Gateway and then the frontend:
+```bash
+cd frontend
+npm start
+```
+
+## API Documentation
+- All REST APIs: OpenAPI/Swagger specs in each service's `docs/` folder
+- Booking GraphQL API: SDL schema in `booking-service/docs/schema.graphql`
+- Central index: [`project_guide/api_docs/README.md`](./project_guide/api_docs/README.md)
+
+## User Guide & Communication Flow
+- [User Guide](./project_guide/user_guide.md): End-user workflows and UI navigation
+- [Communication Flow](./project_guide/communication-flow.md): Service interaction and architecture
+
+## API Documentation
 
 For detailed API specifications, including request/response examples for all endpoints, please refer to the [API Specification Document](./project_guide/api_spec.md).
 
-## 7. Project Guide
+## Project Guide
 
 Further details about the project plan, communication flows, and tasks can be found in the `project_guide` directory.
