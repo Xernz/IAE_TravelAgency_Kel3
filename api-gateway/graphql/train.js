@@ -104,7 +104,7 @@ const typeDefs = gql`
   }
 `;
 
-const TRAIN_SERVICE_URL = 'http://localhost:3007/api/trains';
+const TRAIN_SERVICE_URL = 'http://localhost:3007/api/trains'
 
 const resolvers = {
   Query: {
@@ -307,23 +307,6 @@ const resolvers = {
         throw new Error('An error occurred while fetching trains.');
       }
     },
-    async train(_, { id }) {
-      const res = await fetch(`${TRAIN_SERVICE_URL}/${id}`);
-      const data = await res.json();
-      if (data.status !== 'success') return null;
-      const train = data.data;
-      if (!train) return null; // Ensure train data exists before mapping
-      return {
-        id: train.id,
-        train_number: train.train_number || train.train_no || null,
-        origin: train.origin || train.origin_city || null,
-        destination: train.destination || train.destination_city || null,
-        departure_time: train.departure_time || null,
-        arrival_time: train.arrival_time || null,
-        price: train.price || null,
-        seats_available: train.seats_available || null,
-      };
-    }
   },
   Mutation: {
     async createTrain(_, { train_number, origin, destination, departure_time, arrival_time, price, seats_available }) {

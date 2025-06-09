@@ -79,7 +79,7 @@ exports.filterTrains = (req, res) => {
 
 exports.getTrainDetails = (req, res) => {
   const id = req.params.id;
-  Train.getById(id, (err, train) => {
+  Train.getById(id, null, (err, train) => {
     if (!train) return res.status(404).json({ status: 'error', message: 'Train not found' });
     res.json({ status: 'success', data: train });
   });

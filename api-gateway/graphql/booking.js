@@ -72,7 +72,7 @@ const resolvers = {
       // --- Service endpoint definitions ---
       const SERVICE_ENDPOINTS = {
         hotel: {
-          url: 'http://localhost:3002/api/hotels',
+          url: 'http://localhost:3003/api/hotels',
           decrease: 'availability/decrease',
           increase: 'availability/increase',
           idField: 'refId',
@@ -93,7 +93,7 @@ const resolvers = {
           })
         },
         flight: {
-          url: 'http://localhost:3005/api/flights',
+          url: 'http://localhost:3002/api/flights',
           decrease: 'availability/decrease',
           increase: 'availability/increase',
           idField: 'refId',
@@ -103,7 +103,7 @@ const resolvers = {
           })
         },
         local_travel: {
-          url: 'http://localhost:3008/api/local-travel',
+          url: 'http://localhost:3006/api/local-travel',
           decrease: 'availability/decrease',
           increase: 'availability/increase',
           idField: 'refId',
@@ -168,7 +168,7 @@ const resolvers = {
       // --- Service endpoint definitions (same as in createBooking) ---
       const SERVICE_ENDPOINTS = {
         hotel: {
-          url: 'http://localhost:3002/api/hotels',
+          url: 'http://localhost:3003/api/hotels',
           increase: 'availability/increase',
           idField: 'ref_id',
           payload: (item) => ({
@@ -187,7 +187,7 @@ const resolvers = {
           })
         },
         flight: {
-          url: 'http://localhost:3005/api/flights',
+          url: 'http://localhost:3002/api/flights',
           increase: 'availability/increase',
           idField: 'ref_id',
           payload: (item) => ({
@@ -196,7 +196,7 @@ const resolvers = {
           })
         },
         local_travel: {
-          url: 'http://localhost:3008/api/local-travel',
+          url: 'http://localhost:3006/api/local-travel',
           increase: 'availability/increase',
           idField: 'ref_id',
           payload: (item) => ({

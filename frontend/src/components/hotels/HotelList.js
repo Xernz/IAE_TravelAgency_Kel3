@@ -111,8 +111,8 @@ export default function HotelList() {
     // Data should refetch automatically due to queryFilters changing
   };
 
-  const hotels = data?.hotels?.hotels || [];
-  const paginationInfo = data?.hotels?.pagination;
+  const hotels = data?.filterHotels?.hotels || [];
+  const paginationInfo = data?.filterHotels?.pagination;
   // Use backend pagination if available, otherwise provide sensible defaults
   const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1, total_items: hotels.length };
 
