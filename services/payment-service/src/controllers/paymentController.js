@@ -26,3 +26,10 @@ exports.getUserPayments = (req, res) => {
     res.json({ status: 'success', data: payments });
   });
 };
+
+exports.getAllPayments = (req, res) => {
+  Payment.getAllPayments((err, payments) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to fetch all payments' });
+    res.json({ status: 'success', data: payments });
+  });
+};

@@ -3,7 +3,7 @@ const db = require('../config/db');
 const Payment = {
   create: (userId, bookingId, amount, method, callback) => {
     db.query(
-      'INSERT INTO Payments (user_id, booking_id, amount, method, status) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO Payments (user_id, booking_id, amount, payment_method_type, status) VALUES (?, ?, ?, ?, ?)',
       [userId, bookingId, amount, method, 'pending'],
       (err, results) => callback(err, results)
     );
@@ -13,6 +13,9 @@ const Payment = {
   },
   getUserPayments: (userId, callback) => {
     db.query('SELECT * FROM Payments WHERE user_id = ?', [userId], (err, results) => callback(err, results));
+  },
+   getAllPayments: (callback) => {
+    db.query('SELECT * FROM Payments', (err, results) => callback(err, results));
   },
   updateStatus: (id, status, callback) => {
     db.query('UPDATE Payments SET status = ? WHERE id = ?', [status, id], (err, results) => callback(err, results));
