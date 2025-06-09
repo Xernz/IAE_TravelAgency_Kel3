@@ -69,6 +69,52 @@ const resolvers = {
   },
   Mutation: {
     async createBooking(_, { userId, items }) {
+      // --- Service endpoint definitions ---
+      const SERVICE_ENDPOINTS = {
+        hotel: {
+          url: 'http://localhost:3002/api/hotels',
+          decrease: 'availability/decrease',
+          increase: 'availability/increase',
+          idField: 'refId',
+          payload: (item) => ({
+            room_type_id: item.details.roomTypeId,
+            date: item.details.checkInDate,
+            quantity: item.details.quantity
+          })
+        },
+        train: {
+          url: 'http://localhost:3007/api/trains',
+          decrease: 'availability/decrease',
+          increase: 'availability/increase',
+          idField: 'refId',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        },
+        flight: {
+          url: 'http://localhost:3005/api/flights',
+          decrease: 'availability/decrease',
+          increase: 'availability/increase',
+          idField: 'refId',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        },
+        local_travel: {
+          url: 'http://localhost:3008/api/local-travel',
+          decrease: 'availability/decrease',
+          increase: 'availability/increase',
+          idField: 'refId',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        }
+      };
+
+      // 1. Create the booking
       const res = await fetch(BOOKING_SERVICE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -76,14 +122,122 @@ const resolvers = {
       });
       const data = await res.json();
       if (data.status !== 'success') return null;
-      return data.data;
+      const booking = data.data;
+
+      // 2. For each booking item, decrease availability atomically
+      const decremented = [];
+      try {
+        for (const item of items) {
+          const service = SERVICE_ENDPOINTS[item.type];
+          if (service && item.details && service.payload(item)) {
+            const endpoint = `${service.url}/${item[service.idField]}/${service.decrease}`;
+            const payload = service.payload(item);
+            const response = await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+            const result = await response.json();
+            if (result.status !== 'success') throw new Error(result.message || `Failed to decrease availability for ${item.type}`);
+            decremented.push({ item, service });
+          }
+        }
+      } catch (err) {
+        // Compensate: increase for any previously decremented items
+        for (const { item, service } of decremented) {
+          try {
+            const endpoint = `${service.url}/${item[service.idField]}/${service.increase}`;
+            const payload = service.payload(item);
+            await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+          } catch (rollbackErr) {
+            // Log rollback error
+            console.error(`Rollback failed for ${item.type}:`, rollbackErr.message);
+          }
+        }
+        // Rollback booking
+        await fetch(`${BOOKING_SERVICE_URL}/${booking.id}/cancel`, { method: 'POST' });
+        throw new Error('Booking failed: ' + err.message + '. Rolled back booking and compensated decrements.');
+      }
+      return booking;
     },
     async cancelBooking(_, { bookingId }) {
+      // --- Service endpoint definitions (same as in createBooking) ---
+      const SERVICE_ENDPOINTS = {
+        hotel: {
+          url: 'http://localhost:3002/api/hotels',
+          increase: 'availability/increase',
+          idField: 'ref_id',
+          payload: (item) => ({
+            room_type_id: item.details.roomTypeId,
+            date: item.details.checkInDate,
+            quantity: item.details.quantity
+          })
+        },
+        train: {
+          url: 'http://localhost:3007/api/trains',
+          increase: 'availability/increase',
+          idField: 'ref_id',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        },
+        flight: {
+          url: 'http://localhost:3005/api/flights',
+          increase: 'availability/increase',
+          idField: 'ref_id',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        },
+        local_travel: {
+          url: 'http://localhost:3008/api/local-travel',
+          increase: 'availability/increase',
+          idField: 'ref_id',
+          payload: (item) => ({
+            date: item.details.date,
+            quantity: item.details.quantity
+          })
+        }
+      };
+
+      // 1. Fetch booking details to get items
+      const bookingRes = await fetch(`${BOOKING_SERVICE_URL}/${bookingId}`);
+      const bookingData = await bookingRes.json();
+      if (bookingData.status !== 'success') return false;
+      const booking = bookingData.data;
+
+      // 2. Cancel the booking
       const res = await fetch(`${BOOKING_SERVICE_URL}/${bookingId}/cancel`, {
         method: 'POST'
       });
       const data = await res.json();
-      return data.status === 'success';
+      if (data.status !== 'success') return false;
+
+      // 3. For each booking item, increase availability
+      for (const item of booking.items || []) {
+        const service = SERVICE_ENDPOINTS[item.type];
+        if (service && item.details && service.payload(item)) {
+          try {
+            const endpoint = `${service.url}/${item[service.idField]}/${service.increase}`;
+            const payload = service.payload(item);
+            await fetch(endpoint, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload)
+            });
+          } catch (err) {
+            // Log error, but booking is already canceled
+            console.error(`Availability rollback failed for ${item.type}:`, err.message);
+          }
+        }
+      }
+      return true;
     },
     async modifyBooking(_, { bookingId, items }) {
       const res = await fetch(`${BOOKING_SERVICE_URL}/${bookingId}/modify`, {

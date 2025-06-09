@@ -1,8 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_TRAIN_DETAIL } from '../services/graphqlDetailQueries';
-import { CREATE_TRAIN_BOOKING } from '../services/graphqlQueries'; // Added
+import { useTrainDetail } from '../services/graphqlTrainHooks';
+import { useCreateTrainBooking } from '../services/graphqlBookingHooks';
 import { AuthContext } from '../context/AuthContext'; // Added
 import {
   Typography, Box, CircularProgress, TextField, Button, Alert, Paper, Grid // Added form components
@@ -19,12 +18,10 @@ export default function TrainDetail() {
   const [bookingSuccess, setBookingSuccess] = useState(null);
 
   // Get train details query
-  const { loading: queryLoading, error: queryError, data } = useQuery(GET_TRAIN_DETAIL, { 
-    variables: { id: trainId } 
-  });
+  const { loading: queryLoading, error: queryError, data } = useTrainDetail(trainId);
 
   // Create train booking mutation
-  const [createTrainBooking, { loading: mutationLoading }] = useMutation(CREATE_TRAIN_BOOKING, {
+  const [createTrainBooking, { loading: mutationLoading }] = useCreateTrainBooking({
     onError: (error) => {
       setBookingError(`Booking failed: ${error.message}`);
       setBookingSuccess(null);

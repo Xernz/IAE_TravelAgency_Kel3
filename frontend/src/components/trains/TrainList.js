@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import formatIDR from '../../utils/formatIDR';
-import { useQuery } from '@apollo/client';
-import { FILTER_TRAINS } from '../services/graphqlTrainQueries';
+import { useTrains } from '../../services/graphqlTrainHooks';
 import Pagination from '../common/Pagination';
 import './TrainList.css';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Box, Typography, CircularProgress } from '@mui/material';
@@ -53,30 +52,27 @@ export default function TrainList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Apollo Client query for trains
-  const { data, loading, error } = useQuery(FILTER_TRAINS, {
-    variables: {
-      origin_station_name: filters.origin_station_name || undefined,
-      destination_station_name: filters.destination_station_name || undefined,
-      origin_station_code: filters.origin_station_code || undefined,
-      destination_station_code: filters.destination_station_code || undefined,
-      departure_date: filters.departure_date || undefined,
-      train_class: filters.train_class || undefined,
-      sub_class: filters.sub_class || undefined,
-      min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
-      max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
-      operator_name: filters.operator_name || undefined,
-      train_type: filters.train_type || undefined,
-      origin_city: filters.origin_city || undefined,
-      destination_city: filters.destination_city || undefined,
-      origin_province: filters.origin_province || undefined,
-      destination_province: filters.destination_province || undefined,
-      sort_by: filters.sort_by || 'departure_time',
-      sort_order: filters.sort_order || 'ASC',
-      page: currentPage,
-      limit: itemsPerPage,
-    },
-    fetchPolicy: 'cache-and-network'
+  // GraphQL query
+  const { data, loading, error } = useTrains({
+    origin_station_name: filters.origin_station_name || undefined,
+    destination_station_name: filters.destination_station_name || undefined,
+    origin_station_code: filters.origin_station_code || undefined,
+    destination_station_code: filters.destination_station_code || undefined,
+    departure_date: filters.departure_date || undefined,
+    train_class: filters.train_class || undefined,
+    sub_class: filters.sub_class || undefined,
+    min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+    max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+    operator_name: filters.operator_name || undefined,
+    train_type: filters.train_type || undefined,
+    origin_city: filters.origin_city || undefined,
+    destination_city: filters.destination_city || undefined,
+    origin_province: filters.origin_province || undefined,
+    destination_province: filters.destination_province || undefined,
+    sort_by: filters.sort_by || 'departure_time',
+    sort_order: filters.sort_order || 'ASC',
+    page: currentPage,
+    limit: itemsPerPage,
   });
 
   // Handle filter change

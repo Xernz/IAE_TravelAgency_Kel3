@@ -11,7 +11,7 @@ import SearchLocalTravel from './pages/SearchLocalTravel';
 import SearchTrains from './pages/SearchTrains';
 import { ApolloProvider } from '@apollo/client';
 import { client } from './services/graphql';
-import { useHotels } from './services/graphql';
+import { useHotels } from './services/graphqlHotelHooks';
 export const SnackbarContext = createContext({ showSnackbar: () => {} });
 
 function SnackbarProvider({ children }) {

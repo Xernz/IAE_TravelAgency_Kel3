@@ -15,9 +15,7 @@ import {
   Typography,
   CircularProgress
 } from '@mui/material';
-import { useQuery } from '@apollo/client';
-import { FILTER_LOCAL_TRAVELS } from '../services/graphqlLocalTravelQueries';
-
+import { useLocalTravels } from '../../services/graphqlLocalTravelHooks';
 
 export default function LocalTravelList() {
   // UI filter state uses short names; map to GraphQL variable names
@@ -38,23 +36,20 @@ export default function LocalTravelList() {
   const [currentPage, setCurrentPage] = React.useState(1);
   const [itemsPerPage] = React.useState(10);
 
-  // Apollo Client query for local travel
-  const { data, loading, error } = useQuery(FILTER_LOCAL_TRAVELS, {
-    variables: {
-      origin_city: filters.origin_city || undefined,
-      destination_city: filters.destination_city || undefined,
-      origin_province: filters.origin_province || undefined,
-      destination_province: filters.destination_province || undefined,
-      date: filters.date || undefined,
-      type: filters.type || undefined,
-      min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
-      max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
-      sort_by: filters.sort_by || 'name',
-      sort_order: filters.sort_order || 'ASC',
-      page: currentPage,
-      limit: itemsPerPage,
-    },
-    fetchPolicy: 'cache-and-network'
+  // GraphQL query
+  const { data, loading, error } = useLocalTravels({
+    origin_city: filters.origin_city || undefined,
+    destination_city: filters.destination_city || undefined,
+    origin_province: filters.origin_province || undefined,
+    destination_province: filters.destination_province || undefined,
+    date: filters.date || undefined,
+    type: filters.type || undefined,
+    min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+    max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+    sort_by: filters.sort_by || 'name',
+    sort_order: filters.sort_order || 'ASC',
+    page: currentPage,
+    limit: itemsPerPage,
   });
 
   // Handle page change (MUI Pagination typically provides event, value)

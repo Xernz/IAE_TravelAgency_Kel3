@@ -162,12 +162,14 @@ const resolvers = {
 
       try {
         const res = await fetch(url);
+        console.log('Hotel resolver fetch status:', res.status);
         if (!res.ok) {
           const errorBody = await res.text();
           console.error(`Hotel service request failed (hotels) with status ${res.status}: ${errorBody}`);
           throw new Error(`Failed to fetch hotels from service. Status: ${res.status}`);
         }
         const serviceResponse = await res.json();
+        console.log('Hotel resolver serviceResponse:', JSON.stringify(serviceResponse, null, 2));
 
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
           console.warn('Hotel service (hotels) did not return success or data:', serviceResponse);
@@ -233,6 +235,12 @@ const resolvers = {
 
       } catch (error) {
         console.error('Error in hotels resolver:', error);
+        if (error.response) {
+          console.error('Error response:', error.response.status, error.response.statusText);
+        }
+        if (error.stack) {
+          console.error('Error stack:', error.stack);
+        }
         throw new Error('An error occurred while fetching hotels.');
       }
     },
@@ -302,6 +310,7 @@ const resolvers = {
         max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
       };
     },
+    // Explicit resolver for /search endpoint
     async searchHotels(_, { city, province, name }) {
       const queryParams = new URLSearchParams();
       if (city) queryParams.append('city', city);
@@ -525,19 +534,38 @@ const resolvers = {
         throw new Error('An error occurred while fetching hotel availability.');
       }
     },
+    // Explicit resolver for /:id/pricing endpoint
     async hotelPricing(_, { id, check_in, check_out }) {
-      const url = `${HOTEL_SERVICE_URL}/${id}/availability?check_in=${encodeURIComponent(check_in)}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status !== 'success') return [];
-      return data.data;
-    },
-    async hotelPricing(_, { id, check_in, check_out }) {
-      const url = `${HOTEL_SERVICE_URL}/${id}/pricing?check_in=${encodeURIComponent(check_in)}&check_out=${encodeURIComponent(check_out)}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status !== 'success') return [];
-      return data.data;
+      // TODO: Confirm required params with hotel service (check_in/check_out)
+      const queryParams = new URLSearchParams();
+      if (check_in) queryParams.append('check_in', check_in);
+      if (check_out) queryParams.append('check_out', check_out);
+      const url = `${HOTEL_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Hotel service request failed (hotelPricing) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch hotel pricing from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          // TODO: Improve error reporting for missing/invalid pricing data
+          return [];
+        }
+        // Map pricing data to GraphQL Pricing type
+        return Array.isArray(serviceResponse.data)
+          ? serviceResponse.data.map(price => ({
+              roomTypeId: price.room_type_id || price.roomTypeId || null,
+              price: price.price,
+              currency: price.currency || 'IDR',
+              date: price.date || null,
+            }))
+          : [];
+      } catch (error) {
+        // TODO: Add monitoring/logging for pricing errors
+        throw new Error('An error occurred while fetching hotel pricing: ' + error.message);
+      }
     }
   },
   Mutation: {

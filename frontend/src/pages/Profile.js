@@ -1,12 +1,12 @@
 import React from 'react';
-import { useQuery, useMutation } from '@apollo/client';
+import { useProfile, useUpdateProfile } from '../services/graphqlUserHooks';
 import { Box, Typography, TextField, Button } from '@mui/material';
 import { SnackbarContext } from '../App';
-import { GET_PROFILE, UPDATE_PROFILE } from '../services/graphqlQueries';
+
 
 export default function Profile() {
-  const { loading, error, data } = useQuery(GET_PROFILE);
-  const [updateProfile, { loading: updating }] = useMutation(UPDATE_PROFILE);
+  const { loading, error, data } = useProfile();
+  const [updateProfile, { loading: updating }] = useUpdateProfile();
   const [profile, setProfile] = React.useState({ full_name: '', email: '', phone_number: '', birth_date: '', no_nik: '' });
   const { showSnackbar } = React.useContext(SnackbarContext);
 

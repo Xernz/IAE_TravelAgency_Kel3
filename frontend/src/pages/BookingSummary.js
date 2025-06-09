@@ -1,11 +1,10 @@
 import React from 'react';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_BOOKING_SUMMARY, CREATE_BOOKING } from '../graphql/queries';
+import { useCreateBooking } from '../services/graphqlBookingHooks';
 import { Box, Typography, Paper, Button, Alert, CircularProgress } from '@mui/material';
 
 export default function BookingSummary() {
-  const { loading, error, data } = useQuery(GET_BOOKING_SUMMARY);
-  const [createBooking, { loading: creating }] = useMutation(CREATE_BOOKING);
+  // TODO: If you have a booking summary query, import and use a modular hook for it as well.
+  const [createBooking, { loading: creating }] = useCreateBooking();
   const { showSnackbar } = React.useContext(SnackbarContext);
 
   const selectedFlight = JSON.parse(localStorage.getItem('selectedFlight') || 'null');

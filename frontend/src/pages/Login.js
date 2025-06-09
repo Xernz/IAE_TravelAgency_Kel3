@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { TextField, Button, Box, Typography, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
-import { LOGIN } from '../services/graphqlQueries';
+import { LOGIN } from '../services/graphqlUserQueries';
 
 export default function Login() {
   const [email, setEmail] = useState('');

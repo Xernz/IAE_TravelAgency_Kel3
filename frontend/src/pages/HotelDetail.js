@@ -1,8 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_HOTEL_DETAIL } from '../services/graphqlDetailQueries';
-import { CREATE_HOTEL_BOOKING } from '../services/graphqlQueries'; // Corrected import path
+import { useHotelDetail } from '../services/graphqlHotelHooks';
+import { useCreateHotelBooking } from '../services/graphqlBookingHooks';
 import { AuthContext } from '../context/AuthContext';
 import { Typography, Box, CircularProgress, Button, TextField, Grid, FormControl, InputLabel, Select, MenuItem, Paper, Alert } from '@mui/material';
 
@@ -11,7 +10,7 @@ export default function HotelDetail() {
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
 
-  const { loading: queryLoading, error: queryError, data } = useQuery(GET_HOTEL_DETAIL, { variables: { id: hotelId } });
+  const { loading: queryLoading, error: queryError, data } = useHotelDetail(hotelId);
 
   const [selectedRoomId, setSelectedRoomId] = useState('');
   const [checkInDate, setCheckInDate] = useState('');
@@ -19,7 +18,7 @@ export default function HotelDetail() {
   const [numberOfGuests, setNumberOfGuests] = useState(1);
   // Total price will be calculated or set based on selected room and duration
 
-  const [createHotelBooking, { loading: mutationLoading, error: mutationError, data: mutationData }] = useMutation(CREATE_HOTEL_BOOKING);
+  const [createHotelBooking, { loading: mutationLoading, error: mutationError, data: mutationData }] = useCreateHotelBooking();
 
   const handleBooking = async () => {
     if (!currentUser) {

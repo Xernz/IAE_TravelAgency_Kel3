@@ -89,12 +89,92 @@ const typeDefs = gql`
     createTrain(train_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Train
     # Add other mutations as needed
   }
+
+  type Pricing {
+    seatClass: String
+    price: Float
+    currency: String
+    date: String
+  }
 `;
 
 const TRAIN_SERVICE_URL = 'http://localhost:3007/api/trains';
 
 const resolvers = {
   Query: {
+    // Explicit resolver for /search endpoint
+    async searchTrains(_, { origin, destination, date }) {
+      const queryParams = new URLSearchParams();
+      if (origin) queryParams.append('origin', origin);
+      if (destination) queryParams.append('destination', destination);
+      if (date) queryParams.append('date', date);
+      const url = `${TRAIN_SERVICE_URL}/search?${queryParams.toString()}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Train service request failed (searchTrains) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch searched trains from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return [];
+        }
+        // Map train data to GraphQL Train type
+        return Array.isArray(serviceResponse.data)
+          ? serviceResponse.data.map(train => ({
+              id: train.id,
+              train_number: train.train_number || train.train_no || null,
+              origin_station_name: train.origin_station_name || train.origin_station_code || train.origin || null,
+              destination_station_name: train.destination_station_name || train.destination_station_code || train.destination || null,
+              origin_city: train.origin_city || null,
+              destination_city: train.destination_city || null,
+              departure_time: train.departure_time || null,
+              arrival_time: train.arrival_time || null,
+              price: train.price !== undefined ? parseFloat(train.price) : null,
+              seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
+              train_class: train.train_class || null,
+              subclass: train.subclass || null,
+              train_type: train.train_type || null,
+              operator: train.operator || null,
+              duration: train.duration !== undefined ? parseInt(train.duration, 10) : null,
+            }))
+          : [];
+      } catch (error) {
+        // TODO: Add monitoring/logging for searchTrains errors
+        throw new Error('An error occurred while fetching searched trains: ' + error.message);
+      }
+    },
+    // Explicit resolver for /:id/pricing endpoint
+    async trainPricing(_, { id, date }) {
+      const queryParams = new URLSearchParams();
+      if (date) queryParams.append('date', date);
+      const url = `${TRAIN_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Train service request failed (trainPricing) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch train pricing from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return [];
+        }
+        // Map pricing data to a suitable GraphQL type (adjust as needed)
+        return Array.isArray(serviceResponse.data)
+          ? serviceResponse.data.map(price => ({
+              seatClass: price.seat_class || null,
+              price: price.price,
+              currency: price.currency || 'IDR',
+              date: price.date || null,
+            }))
+          : [];
+      } catch (error) {
+        // TODO: Add monitoring/logging for trainPricing errors
+        throw new Error('An error occurred while fetching train pricing: ' + error.message);
+      }
+    },
     async trains(_, args) {
       let url = `${TRAIN_SERVICE_URL}?`;
       Object.entries(args).forEach(([key, value]) => {

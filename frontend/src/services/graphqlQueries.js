@@ -361,15 +361,23 @@ export const SEARCH_HOTELS = gql`
 export const GET_HOTELS = gql`
   query GetHotels($limit: Int, $page: Int) {
     hotels(limit: $limit, page: $page) {
-      id
-      name
-      city
-      province
-      address
-      star_rating
-      property_type
-      has_wifi
-      has_breakfast
+      hotels {
+        id
+        name
+        city
+        province
+        address
+        star_rating
+        property_type
+        has_wifi
+        has_breakfast
+      }
+      pagination {
+        totalItems
+        totalPages
+        currentPage
+        pageSize
+      }
     }
   }
 `;

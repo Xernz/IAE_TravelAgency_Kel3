@@ -100,6 +100,84 @@ const LOCAL_TRAVEL_SERVICE_URL = 'http://localhost:3006/api/local-travel';
 
 const resolvers = {
   Query: {
+    // Explicit resolver for /search endpoint
+    async searchLocalTravels(_, { origin, destination, date }) {
+      const queryParams = new URLSearchParams();
+      if (origin) queryParams.append('origin', origin);
+      if (destination) queryParams.append('destination', destination);
+      if (date) queryParams.append('date', date);
+      const url = `${LOCAL_TRAVEL_SERVICE_URL}/search?${queryParams.toString()}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Local Travel service request failed (searchLocalTravels) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch searched local travels from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return [];
+        }
+        // Map local travel data to GraphQL LocalTravel type
+        return Array.isArray(serviceResponse.data)
+          ? serviceResponse.data.map(travel => ({
+              id: travel.id,
+              name: travel.name || travel.provider || travel.operator_name || null,
+              type: travel.type || null,
+              provider: travel.provider || travel.operator_name || null,
+              origin: travel.origin_city || travel.origin_kabupaten || travel.origin_province || travel.origin || null,
+              destination: travel.destination_city || travel.destination_kabupaten || travel.destination_province || travel.destination || null,
+              departure_time: travel.departure_time || null,
+              arrival_time: travel.arrival_time || null,
+              price: travel.price !== undefined ? parseFloat(travel.price) : null,
+              seats_available: travel.seats_available !== undefined ? parseInt(travel.seats_available, 10) : (travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null),
+              vehicle_model: travel.vehicle_model || travel.vehicle_type || null,
+              origin_province: travel.origin_province || null,
+              destination_province: travel.destination_province || null,
+              origin_kabupaten: travel.origin_kabupaten || null,
+              destination_kabupaten: travel.destination_kabupaten || null,
+              route: travel.route || null,
+              capacity: travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null,
+              class_type: travel.class_type || null,
+              has_ac: travel.has_ac,
+              has_wifi: travel.has_wifi,
+            }))
+          : [];
+      } catch (error) {
+        // TODO: Add monitoring/logging for searchLocalTravels errors
+        throw new Error('An error occurred while fetching searched local travels: ' + error.message);
+      }
+    },
+    // Explicit resolver for /:id/pricing endpoint
+    async localTravelPricing(_, { id, date }) {
+      const queryParams = new URLSearchParams();
+      if (date) queryParams.append('date', date);
+      const url = `${LOCAL_TRAVEL_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Local Travel service request failed (localTravelPricing) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch local travel pricing from service. Status: ${res.status}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return [];
+        }
+        // Map pricing data to a suitable GraphQL type (adjust as needed)
+        return Array.isArray(serviceResponse.data)
+          ? serviceResponse.data.map(price => ({
+              seatClass: price.seat_class || null,
+              price: price.price,
+              currency: price.currency || 'IDR',
+              date: price.date || null,
+            }))
+          : [];
+      } catch (error) {
+        // TODO: Add monitoring/logging for localTravelPricing errors
+        throw new Error('An error occurred while fetching local travel pricing: ' + error.message);
+      }
+    },
     async localTravels(_, args) {
       let url = `${LOCAL_TRAVEL_SERVICE_URL}?`;
       Object.entries(args).forEach(([key, value]) => {

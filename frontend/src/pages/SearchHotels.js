@@ -1,5 +1,5 @@
 import React from 'react';
-import { useHotels } from '../services/graphql';
+import { useHotels } from '../services/graphqlHotelHooks';
 import { Box, Typography } from '@mui/material';
 import HotelList from '../components/hotels/HotelList';
 

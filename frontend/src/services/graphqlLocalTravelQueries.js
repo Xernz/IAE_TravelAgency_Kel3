@@ -1,5 +1,53 @@
 import { gql } from '@apollo/client';
 
+// Local travel detail query
+export const GET_LOCAL_TRAVEL_DETAIL = gql`
+  query GetLocalTravelDetail($id: ID!) {
+    localTravel(id: $id) {
+      id
+      name
+      origin
+      destination
+      vehicle_model
+      price
+      details
+    }
+  }
+`;
+
+
+// Local travel pricing query
+export const LOCAL_TRAVEL_PRICING = gql`
+  query LocalTravelPricing($id: ID!, $check_in: String, $check_out: String) {
+    localTravelPricing(id: $id, check_in: $check_in, check_out: $check_out) {
+      basePrice
+      taxes
+      fees
+      total
+      currency
+      discount
+      available
+    }
+  }
+`;
+
+
+// Local travel list query (copied from graphqlQueries.js)
+export const GET_LOCAL_TRAVEL = gql`
+  query GetLocalTravel($origin: String, $destination: String, $date: String) {
+    localTravel(origin: $origin, destination: $destination, date: $date) {
+      id
+      name
+      origin
+      destination
+      vehicle_model
+      price
+    }
+  }
+`;
+
+
+// Local travel filter (copied from graphqlQueries.js)
 export const FILTER_LOCAL_TRAVELS = gql`
   query FilterLocalTravels(
     $origin_city: String
@@ -37,6 +85,7 @@ export const FILTER_LOCAL_TRAVELS = gql`
         provider: $provider
         min_capacity: $min_capacity
         max_capacity: $max_capacity
+
         min_price: $min_price
         max_price: $max_price
       }
@@ -69,8 +118,8 @@ export const FILTER_LOCAL_TRAVELS = gql`
         vehicle_model
         has_ac
         has_wifi
-        amenities
-        images
+        amenities # Array of strings
+        images # Array of strings (URLs)
       }
       pagination {
         total_items
@@ -78,6 +127,31 @@ export const FILTER_LOCAL_TRAVELS = gql`
         current_page
         limit
       }
+    }
+  }
+`;
+// Local travel creation (copied from graphqlQueries.js)
+export const CREATE_LOCAL_TRAVEL = gql`
+  mutation CreateLocalTravel($type: String, $provider: String, $origin: String, $destination: String, $departure_time: String, $arrival_time: String, $price: Float, $seats_available: Int) {
+    createLocalTravel(
+      type: $type,
+      provider: $provider,
+      origin: $origin,
+      destination: $destination,
+      departure_time: $departure_time,
+      arrival_time: $arrival_time,
+      price: $price,
+      seats_available: $seats_available
+    ) {
+      id
+      type
+      provider
+      origin
+      destination
+      departure_time
+      arrival_time
+      price
+      seats_available
     }
   }
 `;

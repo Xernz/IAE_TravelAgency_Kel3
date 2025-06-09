@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { useQuery } from '@apollo/client';
-import { GET_FLIGHTS } from '../services/graphqlQueries';
+import { useFlights } from '../services/graphqlFlightHooks';
 import { Box, Typography } from '@mui/material';
 import FlightList from '../components/flights/FlightList';
 
 export default function SearchFlights() {
-  const { loading, error, data } = useQuery(GET_FLIGHTS, { variables: { page: 1, limit: 10 } });
+  const { loading, error, data } = useFlights({ page: 1, limit: 10 });
 
   if (loading) return <Typography>Loading flights...</Typography>;
   if (error) return <Typography color="error">Error: {error.message}</Typography>;

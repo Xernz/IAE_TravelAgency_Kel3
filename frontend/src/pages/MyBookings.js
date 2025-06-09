@@ -1,20 +1,18 @@
 import React, { useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext'; // Assuming AuthContext provides user ID
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_MY_BOOKINGS, CANCEL_BOOKING, MODIFY_BOOKING, CREATE_PAYMENT } from '../services/graphqlQueries';
+import { useMyBookings, useCancelBooking, useModifyBooking } from '../services/graphqlBookingHooks';
+import { useCreatePayment } from '../services/graphqlPaymentHooks';
 import { Box, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, Button, Alert, CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
 import { SnackbarContext } from '../App';
 
 export default function MyBookings() {
   const { currentUser } = useContext(AuthContext); // Get currentUser from AuthContext
-  const { loading, error, data, refetch } = useQuery(GET_MY_BOOKINGS, {
-    variables: { userId: currentUser?.id },
-    skip: !currentUser?.id, // Skip query if userId is not available
+  const { loading, error, data, refetch } = useMyBookings(currentUser?.id, {
+    skip: !currentUser?.id,
   });
-  const [cancelBooking] = useMutation(CANCEL_BOOKING);
-  const [modifyBooking] = useMutation(MODIFY_BOOKING);
-  // Payment mutation aligned with API Gateway
-const [createPayment, { loading: payLoading }] = useMutation(CREATE_PAYMENT);
+  const [cancelBooking] = useCancelBooking();
+  const [modifyBooking] = useModifyBooking();
+  const [createPayment, { loading: payLoading }] = useCreatePayment();
   const { showSnackbar } = React.useContext(SnackbarContext);
 
   const handleCancel = async (bookingId) => {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import formatIDR from '../../utils/formatIDR';
-import { useHotels } from '../services/graphqlHotelQueries'; // Updated import
+import { useHotels } from '../../services/graphqlHotelHooks';
 import { 
   Box, 
   Button, 
@@ -52,8 +52,8 @@ export default function HotelList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
 
-  // Prepare filters for the useHotels hook
-  const queryFilters = {
+  // Prepare variables for the useHotels hook, matching backend expectations
+  const filterVars = {
     name: filters.name || undefined,
     city: filters.city || undefined,
     province: filters.province || undefined,
@@ -61,16 +61,23 @@ export default function HotelList() {
     property_type: filters.property_type || undefined,
     min_star_rating: filters.min_star_rating ? parseInt(filters.min_star_rating) : undefined,
     max_star_rating: filters.max_star_rating ? parseInt(filters.max_star_rating) : undefined,
-    min_price_per_night: filters.min_price_per_night ? parseFloat(filters.min_price_per_night) : undefined,
-    max_price_per_night: filters.max_price_per_night ? parseFloat(filters.max_price_per_night) : undefined,
-    amenities_include_any: filters.amenities_include_any && filters.amenities_include_any.length > 0 ? filters.amenities_include_any : undefined,
-    amenities_include_all: filters.amenities_include_all && filters.amenities_include_all.length > 0 ? filters.amenities_include_all : undefined,
+    amenities_include: filters.amenities_include_any && filters.amenities_include_any.length > 0 ? filters.amenities_include_any : undefined,
     is_pet_friendly: filters.is_pet_friendly === '' ? undefined : Boolean(filters.is_pet_friendly),
-    min_room_size_sqm: filters.min_room_size_sqm ? parseFloat(filters.min_room_size_sqm) : undefined,
-    sort_by: filters.sort_by || undefined,
-    sort_order: filters.sort_order || undefined,
+  };
+  const sortVars = {
+    sortBy: filters.sort_by || undefined,
+    sortOrder: filters.sort_order || undefined,
+  };
+  // Remove undefined sort keys
+  Object.keys(sortVars).forEach(key => sortVars[key] === undefined && delete sortVars[key]);
+  const paginationVars = {
     page: currentPage,
     limit: itemsPerPage,
+  };
+  const queryFilters = {
+    filters: filterVars,
+    sort: Object.keys(sortVars).length ? sortVars : undefined,
+    pagination: paginationVars,
   };
 
   const { data, loading, error } = useHotels(queryFilters);
@@ -104,11 +111,11 @@ export default function HotelList() {
     // Data should refetch automatically due to queryFilters changing
   };
 
-  const hotels = data?.filterHotels?.hotels || [];
-  const paginationInfo = data?.filterHotels?.pagination;
-
+  const hotels = data?.hotels?.hotels || [];
+  const paginationInfo = data?.hotels?.pagination;
   // Use backend pagination if available, otherwise provide sensible defaults
-  const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1, total_items: 0 };
+  const currentPagination = paginationInfo || { current_page: currentPage, total_pages: 1, total_items: hotels.length };
+
 
   // Render loading state
   if (loading) {

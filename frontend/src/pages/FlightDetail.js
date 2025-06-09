@@ -1,8 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_FLIGHT_DETAIL } from '../services/graphqlDetailQueries';
-import { CREATE_FLIGHT_BOOKING } from '../services/graphqlQueries'; // Added
+import { useFlightDetail } from '../services/graphqlFlightHooks';
+import { useCreateFlightBooking } from '../services/graphqlBookingHooks';
 import { AuthContext } from '../context/AuthContext'; // Added
 import {
   Typography, Box, CircularProgress, TextField, Button, Alert, Paper, Grid // Added form components
@@ -19,12 +18,10 @@ export default function FlightDetail() {
   const [bookingSuccess, setBookingSuccess] = useState(null);
 
   // Get flight details query
-  const { loading: queryLoading, error: queryError, data } = useQuery(GET_FLIGHT_DETAIL, { 
-    variables: { id: flightId } 
-  });
+  const { loading: queryLoading, error: queryError, data } = useFlightDetail(flightId);
 
   // Create flight booking mutation
-  const [createFlightBooking, { loading: mutationLoading }] = useMutation(CREATE_FLIGHT_BOOKING, {
+  const [createFlightBooking, { loading: mutationLoading }] = useCreateFlightBooking({
     onError: (error) => {
       setBookingError(`Booking failed: ${error.message}`);
       setBookingSuccess(null);

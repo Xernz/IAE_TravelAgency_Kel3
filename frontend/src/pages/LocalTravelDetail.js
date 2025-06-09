@@ -1,8 +1,7 @@
 import React, { useState, useContext } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@apollo/client';
-import { GET_LOCAL_TRAVEL_DETAIL } from '../services/graphqlDetailQueries';
-import { CREATE_LOCAL_TRAVEL_BOOKING } from '../services/graphqlQueries'; // Added
+import { useLocalTravelDetail } from '../services/graphqlLocalTravelHooks';
+import { useCreateLocalTravelBooking } from '../services/graphqlBookingHooks';
 import { AuthContext } from '../context/AuthContext'; // Added
 import {
   Typography, Box, CircularProgress, Button, Alert, Paper, Grid // Added form components
@@ -18,12 +17,10 @@ export default function LocalTravelDetail() {
   const [bookingSuccess, setBookingSuccess] = useState(null);
 
   // Get local travel details query
-  const { loading: queryLoading, error: queryError, data } = useQuery(GET_LOCAL_TRAVEL_DETAIL, { 
-    variables: { id: localTravelId } 
-  });
+  const { loading: queryLoading, error: queryError, data } = useLocalTravelDetail(localTravelId);
 
   // Create local travel booking mutation
-  const [createLocalTravelBooking, { loading: mutationLoading }] = useMutation(CREATE_LOCAL_TRAVEL_BOOKING, {
+  const [createLocalTravelBooking, { loading: mutationLoading }] = useCreateLocalTravelBooking({
     onError: (error) => {
       setBookingError(`Booking failed: ${error.message}`);
       setBookingSuccess(null);

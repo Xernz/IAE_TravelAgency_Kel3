@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { useQuery } from '@apollo/client';
-import { FILTER_FLIGHTS } from '../../services/graphqlFlightQueries';
+import { useFlights } from '../../services/graphqlFlightHooks';
 import Pagination from '../common/Pagination';
 import './FlightList.css';
 import { Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper, CircularProgress, Box, TextField, Button } from '@mui/material';
@@ -29,24 +28,21 @@ export default function FlightList() {
   });
 
   // GraphQL query
-  const { data, loading, error } = useQuery(FILTER_FLIGHTS, {
-    variables: {
-      origin_city: filters.origin_city || undefined,
-      destination_city: filters.destination_city || undefined,
-      origin_code: filters.origin_code || undefined,
-      destination_code: filters.destination_code || undefined,
-      airline_name: filters.airline_name || undefined,
-      airline_code: filters.airline_code || undefined,
-      flight_class: filters.flight_class || undefined,
-      departure_date: filters.departure_date || undefined,
-      min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
-      max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
-      sort_by: filters.sort_by || undefined,
-      sort_order: filters.sort_order || undefined,
-      page: currentPage,
-      limit: itemsPerPage,
-    },
-    fetchPolicy: 'cache-and-network' // Ensure fresh data on filter changes
+  const { data, loading, error } = useFlights({
+    origin_city: filters.origin_city || undefined,
+    destination_city: filters.destination_city || undefined,
+    origin_code: filters.origin_code || undefined,
+    destination_code: filters.destination_code || undefined,
+    airline_name: filters.airline_name || undefined,
+    airline_code: filters.airline_code || undefined,
+    flight_class: filters.flight_class || undefined,
+    departure_date: filters.departure_date || undefined,
+    min_price: filters.min_price ? parseFloat(filters.min_price) : undefined,
+    max_price: filters.max_price ? parseFloat(filters.max_price) : undefined,
+    sort_by: filters.sort_by || undefined,
+    sort_order: filters.sort_order || undefined,
+    page: currentPage,
+    limit: itemsPerPage,
   });
 
   // Handle filter changes

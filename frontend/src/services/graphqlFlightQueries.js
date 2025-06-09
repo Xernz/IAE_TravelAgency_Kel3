@@ -1,5 +1,57 @@
 import { gql } from '@apollo/client';
 
+// Flight detail query
+export const GET_FLIGHT_DETAIL = gql`
+  query GetFlightDetail($id: ID!) {
+    flight(id: $id) {
+      id
+      airline
+      origin
+      destination
+      departure_time
+      arrival_time
+      price
+      details
+    }
+  }
+`;
+
+
+// Flight pricing query
+export const FLIGHT_PRICING = gql`
+  query FlightPricing($id: ID!, $check_in: String, $check_out: String) {
+    flightPricing(id: $id, check_in: $check_in, check_out: $check_out) {
+      basePrice
+      taxes
+      fees
+      total
+      currency
+      discount
+      available
+    }
+  }
+`;
+
+
+// Flight list query (copied from graphqlQueries.js)
+export const GET_FLIGHTS = gql`
+  query GetFlights($origin: String, $destination: String, $date: String) {
+    flights(origin: $origin, destination: $destination, date: $date) {
+      id
+      airline
+      flight_number
+      origin
+      destination
+      departure_time
+      arrival_time
+      price
+      seats_available
+    }
+  }
+`;
+
+
+// Flight filter (copied from graphqlQueries.js)
 export const FILTER_FLIGHTS = gql`
   query FilterFlights(
     $origin_city: String
@@ -67,3 +119,29 @@ export const FILTER_FLIGHTS = gql`
     }
   }
 `;
+// Flight creation (copied from graphqlQueries.js)
+export const CREATE_FLIGHT = gql`
+  mutation CreateFlight($airline: String, $flight_number: String, $origin: String, $destination: String, $departure_time: String, $arrival_time: String, $price: Float, $seats_available: Int) {
+    createFlight(
+      airline: $airline
+      flight_number: $flight_number
+      origin: $origin
+      destination: $destination
+      departure_time: $departure_time
+      arrival_time: $arrival_time
+      price: $price
+      seats_available: $seats_available
+    ) {
+      id
+      airline
+      flight_number
+      origin
+      destination
+      departure_time
+      arrival_time
+      price
+      seats_available
+    }
+  }
+`;
+

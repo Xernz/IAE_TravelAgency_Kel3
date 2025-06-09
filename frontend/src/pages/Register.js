@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography, Alert } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { useMutation } from '@apollo/client';
-import { REGISTER } from '../services/graphqlQueries';
+import { useRegister } from '../services/graphqlUserHooks';
 
 export default function Register() {
 // Updated for new user schema: full_name, email, password, phone_number, birth_date, no_nik
@@ -17,7 +16,7 @@ export default function Register() {
   const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
-  const [registerMutation, { loading: registering }] = useMutation(REGISTER);
+  const [registerMutation, { loading: registering }] = useRegister();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
