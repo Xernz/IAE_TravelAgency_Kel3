@@ -82,6 +82,12 @@ const typeDefs = gql`
     localTravels(origin: String, destination: String, date: String): [LocalTravel]
     localTravel(id: ID!): LocalTravel
 
+    # Search local travels query
+    searchLocalTravels(origin: String, destination: String, date: String): [LocalTravel]
+
+    # Pricing query for a specific local travel
+    localTravelPricing(id: ID!, date: String): Pricing
+
     # New filter query
     filterLocalTravels(
       filters: LocalTravelFiltersInput

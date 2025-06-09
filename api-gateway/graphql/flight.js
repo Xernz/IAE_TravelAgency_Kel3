@@ -63,6 +63,12 @@ const typeDefs = gql`
     flights(origin: String, destination: String, date: String): [Flight]
     flight(id: ID!): Flight
 
+    # Search flights query
+    searchFlights(origin: String, destination: String, date: String): [Flight]
+
+    # Pricing query for a specific flight
+    flightPricing(id: ID!, date: String): Pricing
+
     # New filter query
     filterFlights(
       filters: FlightFiltersInput

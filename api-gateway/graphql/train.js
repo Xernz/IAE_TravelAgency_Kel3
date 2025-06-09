@@ -77,6 +77,12 @@ const typeDefs = gql`
     trains(origin: String, destination: String, date: String): [Train]
     train(id: ID!): Train
 
+    # Search trains query
+    searchTrains(origin: String, destination: String, date: String): [Train]
+
+    # Pricing query for a specific train
+    trainPricing(id: ID!, date: String): Pricing
+
     # New filter query
     filterTrains(
       filters: TrainFiltersInput
