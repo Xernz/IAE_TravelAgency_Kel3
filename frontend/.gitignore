@@ -11,6 +11,8 @@
 # production
 /build
 
+# Do NOT ignore the public folder! It should always be tracked by git.
+
 # misc
 .DS_Store
 .env.local
