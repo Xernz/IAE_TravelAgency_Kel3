@@ -1,30 +1,75 @@
 # Inter-Service and Consumer Interface Communication Flow Documentation
 
 ## Overview
-The Travel Agency System consists of four main services:
-- Booking Service
-- Flight Service
-- Hotel Service
-- Consumer Interface Backend
+The Travel Agency System consists of the following components:
+- **API Gateway** (central entry point for all frontend and cross-service calls)
+- **Frontend:** React + Material-UI (consumer-facing UI)
+- **Microservices:**
+  - Users Service
+  - Booking Service
+  - Payment Service
+  - Flight Service
+  - Hotel Service
+  - Train Service
+  - Local Travel Service
 
-Each service acts as both a provider (exposing its own data via REST APIs) and a consumer (fetching data from other services). This document describes how these services communicate with each other.
+All services are decoupled and communicate via REST or GraphQL APIs, with the API Gateway acting as the primary orchestrator for both frontend and most inter-service flows.
 
-## Service Roles and Communication
+## Communication Patterns
 
-### 1. Booking Service (Consumer)
-- **Calls:**
-  - **Flight Service**
-    - `POST /flights/decrement-seat` — Decrement seat when booking created
-    - `POST /flights/increment-seat` — Increment seat when booking deleted
-    - `GET /flights/:id` — Retrieves flight details
-    - `GET /flights/search` — Searches for available flights
-    - `GET /flights/:id/availability` — Checks flight availability
-  - **Hotel Service**
-    - `POST /hotels/decrement-room` — Decrement room when booking created
-    - `POST /hotels/increment-room` — Increment room when booking deleted
-    - `GET /hotels/:id` — Retrieves hotel details
-    - `GET /hotels/:id/availability` — Checks hotel room availability
-- **Purpose:**
+### 1. Frontend ↔ API Gateway
+- **GraphQL:** Used for booking workflows (create, modify, cancel, query bookings)
+- **REST:** Used for payments, user profile, and search endpoints
+- **Authentication:** Managed via API Gateway (passes JWT/session to downstream services)
+
+### 2. API Gateway ↔ Microservices
+- **Routes requests** to the appropriate backend service (REST or GraphQL)
+- **Aggregates data** for complex UI queries (e.g., user dashboard, booking history)
+- **Handles service discovery and error translation**
+
+### 3. Inter-Service Communication
+- **Booking Service**:
+  - Calls Flight, Hotel, Train, Local Travel Services to check availability and reserve/release inventory (via REST endpoints)
+  - Calls Payment Service to initiate or verify payments (REST)
+  - Calls Users Service to verify user existence and fetch user details (REST)
+- **Payment Service**:
+  - Notifies Booking Service of payment status (callback or polling via REST)
+- **Search Services (Flight, Hotel, Train, Local Travel):**
+  - Expose REST endpoints for search and availability
+  - No direct calls to other services (stateless)
+- **Users Service:**
+  - Handles registration, authentication, and profile management
+  - Exposes REST endpoints for user CRUD
+
+## Example Flows
+
+### Booking Creation (Frontend → API Gateway → Services)
+1. User initiates booking via frontend (GraphQL mutation to API Gateway)
+2. API Gateway calls Booking Service (GraphQL)
+3. Booking Service checks inventory with Flight/Hotel/Train/Local Travel Services (REST)
+4. If available, Booking Service creates booking and returns booking ID
+5. User proceeds to payment (REST call via API Gateway to Payment Service)
+
+### Payment Flow
+1. User selects "Pay Now" (frontend → API Gateway → Payment Service)
+2. Payment Service processes payment and updates status
+3. Payment Service notifies Booking Service of payment result
+
+### Search Flow
+- Frontend calls API Gateway (REST)
+- API Gateway forwards to relevant service (Flight/Hotel/Train/Local Travel)
+- Results are returned to the frontend
+
+## Diagram (Textual)
+
+Frontend (React) ⇄ API Gateway ⇄ [Users | Booking | Payment | Flight | Hotel | Train | Local Travel]
+
+- All cross-service and frontend-service communication is routed through the API Gateway for security, aggregation, and monitoring.
+
+## Notes
+- All services expose OpenAPI/Swagger (REST) or SDL (GraphQL) documentation.
+- Logging, monitoring, and error handling are standardized across all services.
+- For detailed API specs, see `project_guide/api_docs/README.md`.
   - To manage seat/room inventory and collect up-to-date information when creating or deleting bookings.
 
 ### 2. Flight Service (Consumer)
