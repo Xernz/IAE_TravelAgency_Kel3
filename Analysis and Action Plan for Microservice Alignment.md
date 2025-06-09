@@ -14,30 +14,17 @@ This document outlines a prioritized plan to address the issues from the June 10
     
 
 ### **Phase 1: Critical Stability Fixes (Immediate Priority)**
-
 This phase addresses all known system-breaking issues. The goal is to achieve a stable state where services can communicate correctly, making further development and testing possible.
 
-**1. Correct All Service URL and Port Misconfigurations in API Gateway:**
+Correct All Service URL and Port Misconfigurations in API Gateway (Verified on 2025-06-10):
+Action: The following changes are required within the GraphQL resolver files in the API Gateway to ensure they call the correct microservice ports.
 
-   (Note: The target ports listed below reflect the actual ports the microservices are currently configured to listen on, as verified on 2025-06-10.)
+In api-gateway/graphql/booking.js:
+    For inter-service calls to the Hotel service, change port from 3002 to 3003.
+    For inter-service calls to the Flight service, change port from 3005 to 3002.
+    For inter-service calls to the Local Travel service, change port from 3008 to 3006.
 
-- **Booking Service (`api-gateway/graphql/booking.js`):** In the `createBooking`, `cancelBooking`, and other relevant resolvers, ensure/correct the hardcoded ports for inter-service calls:
-    
-    - Hotel: Current API Gateway calls use port `3002`. Target should be `3003` (Actual Hotel Service port). **Action: Change `3002` to `3003`**.
-    - Train: Current API Gateway calls use port `3007`. Target should be `3007` (Actual Train Service port). **Action: No change needed.**
-    - Flight: Current API Gateway calls use port `3005`. Target should be `3002` (Actual Flight Service port). **Action: Change `3005` to `3002`**.
-    - Local Travel: Current API Gateway calls use port `3008`. Target should be `3006` (Actual Local Travel Service port). **Action: Change `3008` to `3006`**.
-        
-- **Flight Service (`api-gateway/graphql/flight.js`):** `FLIGHT_SERVICE_URL` currently uses port `3002`. Target should be `3002` (Actual Flight Service port). **Action: No change needed.**
-    
-- **Users Service (`api-gateway/graphql/users.js`):** `USERS_SERVICE_URL` currently uses port `3001`. Target should be `3001` (Actual Users Service port). **Action: No change needed.**
-    
-- **Hotel Service (`api-gateway/graphql/hotel.js`):** `HOTEL_SERVICE_URL` currently uses port `3003`. Target should be `3003` (Actual Hotel Service port). **Action: No change needed.**
-    
-- **Train Service (`api-gateway/graphql/train.js`):** `TRAIN_SERVICE_URL` currently uses port `3007`. Target should be `3007` (Actual Train Service port). **Action: No change needed.**
-    
-- **Local Travel Service (`api-gateway/graphql/localTravel.js`):** `LOCAL_TRAVEL_SERVICE_URL` currently uses port `3006`. Target should be `3006` (Actual Local Travel Service port). **Action: No change needed.**
-    
+Note: All other service URL constants (FLIGHT_SERVICE_URL, USERS_SERVICE_URL, etc.) have been verified as correct and require no changes.
 
 **2. Implement Core Authentication Flow:**
 
