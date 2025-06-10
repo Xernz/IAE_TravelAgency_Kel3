@@ -1,5 +1,33 @@
 const LocalTravel = require('../models/LocalTravel');
 
+// Create a new LocalTravel entry
+exports.createLocalTravel = (req, res) => {
+  const data = req.body;
+  LocalTravel.create(data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to create local travel', details: err.message });
+    // Fetch the created entry by insertId
+    LocalTravel.getById(result.insertId, (err2, created) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Created but failed to retrieve', details: err2.message });
+      res.status(201).json({ status: 'success', data: created });
+    });
+  });
+};
+
+// Update an existing LocalTravel entry
+exports.updateLocalTravel = (req, res) => {
+  const id = req.params.id;
+  const data = req.body;
+  LocalTravel.update(id, data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to update local travel', details: err.message });
+    if (result.affectedRows === 0) return res.status(404).json({ status: 'error', message: 'Local travel not found or no changes made' });
+    // Fetch the updated entry
+    LocalTravel.getById(id, (err2, updated) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Updated but failed to retrieve', details: err2.message });
+      res.json({ status: 'success', data: updated });
+    });
+  });
+};
+
 exports.searchLocalTravel = (req, res) => {
   const { origin_city, destination_city, route } = req.query;
   LocalTravel.search({ origin_city, destination_city, route }, (err, options) => {

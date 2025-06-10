@@ -16,8 +16,8 @@ const typeDefs = gql`
     updated_at: String
   }
   type Query {
-    payments(userId: ID, bookingId: ID): [Payment]
-    payment(id: ID!): Payment
+    payments(bookingId: ID!): [Payment]
+    getPaymentStatus(id: ID!): String
   }
   type Mutation {
     createPayment(userId: ID!, bookingId: ID!, amount: Float!, currency: String, payment_method_type: String, payment_reference: String): Payment
@@ -28,11 +28,9 @@ const PAYMENT_SERVICE_URL = 'http://localhost:3005/api/payments';
 
 const resolvers = {
   Query: {
-    async payments(_, args) {
-      let url = `${PAYMENT_SERVICE_URL}?`;
-      Object.entries(args).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) url += `${key}=${encodeURIComponent(value)}&`;
-      });
+    async payments(_, { bookingId }) {
+      if (!bookingId) throw new Error('bookingId is required');
+      const url = `${PAYMENT_SERVICE_URL}/booking/${bookingId}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.status !== 'success') return [];
@@ -49,23 +47,11 @@ const resolvers = {
         updated_at: payment.updated_at || null,
       }));
     },
-    async payment(_, { id }) {
-      const res = await fetch(`${PAYMENT_SERVICE_URL}/${id}`);
+    async getPaymentStatus(_, { id }) {
+      const res = await fetch(`${PAYMENT_SERVICE_URL}/${id}/status`);
       const data = await res.json();
       if (data.status !== 'success') return null;
-      const payment = data.data;
-      return {
-        id: payment.id,
-        user_id: payment.user_id || null,
-        booking_id: payment.booking_id || null,
-        amount: payment.amount || null,
-        currency: payment.currency || null,
-        payment_method_type: payment.payment_method_type || null,
-        payment_reference: payment.payment_reference || null,
-        status: payment.status || null,
-        created_at: payment.created_at || null,
-        updated_at: payment.updated_at || null,
-      };
+      return data.status || null;
     }
   },
   Mutation: {

@@ -1,5 +1,33 @@
 const Hotel = require('../models/Hotel');
 
+// Create a new Hotel entry
+exports.createHotel = (req, res) => {
+  const data = req.body;
+  Hotel.create(data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to create hotel', details: err.message });
+    // Fetch the created entry by insertId
+    Hotel.getById(result.insertId, (err2, created) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Created but failed to retrieve', details: err2.message });
+      res.status(201).json({ status: 'success', data: created });
+    });
+  });
+};
+
+// Update an existing Hotel entry
+exports.updateHotel = (req, res) => {
+  const id = req.params.id;
+  const data = req.body;
+  Hotel.update(id, data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to update hotel', details: err.message });
+    if (result.affectedRows === 0) return res.status(404).json({ status: 'error', message: 'Hotel not found or no changes made' });
+    // Fetch the updated entry
+    Hotel.getById(id, (err2, updated) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Updated but failed to retrieve', details: err2.message });
+      res.json({ status: 'success', data: updated });
+    });
+  });
+};
+
 // Decrease room availability (booking)
 exports.decreaseAvailability = (req, res) => {
   const hotelId = req.params.id;
@@ -30,13 +58,15 @@ exports.increaseAvailability = (req, res) => {
   });
 };
 
-exports.searchHotels = (req, res) => {
-  const { city, province } = req.query;
-  Hotel.search({ city, province }, (err, hotels) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Search failed' });
-    res.json({ status: 'success', data: hotels });
-  });
-};
+// [DEPRECATED] searchHotels: /search endpoint is deprecated. Use filterHotels instead.
+// exports.searchHotels = (req, res) => {
+//   const { city, province } = req.query;
+//   Hotel.search({ city, province }, (err, hotels) => {
+//     if (err) return res.status(500).json({ status: 'error', message: 'Search failed' });
+//     res.json({ status: 'success', data: hotels });
+//   });
+// };
+// See filterHotels for all search/filter logic.
 
 exports.listAllHotels = (req, res) => {
   // Extract pagination parameters from query string

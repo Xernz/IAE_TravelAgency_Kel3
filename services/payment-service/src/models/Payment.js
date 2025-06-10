@@ -16,6 +16,9 @@ const Payment = {
   },
   updateStatus: (id, status, callback) => {
     db.query('UPDATE Payments SET status = ? WHERE id = ?', [status, id], (err, results) => callback(err, results));
+  },
+  getPaymentsByBookingId: (bookingId, callback) => {
+    db.query('SELECT * FROM Payments WHERE booking_id = ?', [bookingId], (err, results) => callback(err, results));
   }
 };
 

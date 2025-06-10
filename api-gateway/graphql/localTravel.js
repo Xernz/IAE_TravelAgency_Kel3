@@ -14,7 +14,7 @@ const typeDefs = gql`
     arrival_time: String
     price: Float
     seats_available: Int # Or available_units / capacity
-    vehicle_model: String # As expected by frontend
+    vehicle_model: String
     origin_province: String
     destination_province: String
     origin_kabupaten: String
@@ -72,6 +72,11 @@ const typeDefs = gql`
     hasPrevPage: Boolean
   }
 
+  type AvailabilityResponse {
+    status: String!
+    message: String    affectedRows: Int
+  }
+
   type LocalTravelsPage {
     localTravels: [LocalTravel!]!
     pagination: PaginationInfo
@@ -79,14 +84,11 @@ const typeDefs = gql`
 
   type Query {
     # Existing queries
-    localTravels(origin: String, destination: String, date: String): [LocalTravel]
+    localTravels(pagination: PaginationInput): [LocalTravel]
     localTravel(id: ID!): LocalTravel
 
-    # Search local travels query
-    searchLocalTravels(origin: String, destination: String, date: String): [LocalTravel]
-
     # Pricing query for a specific local travel
-    localTravelPricing(id: ID!, date: String): Pricing
+    localTravelPricing(id: ID!, date: String): [Pricing]
 
     # New filter query
     filterLocalTravels(
@@ -97,6 +99,8 @@ const typeDefs = gql`
   }
 
   type Mutation {
+    decreaseLocalTravelAvailability(localTravelId: ID!, date: String!, quantity: Int!, classType: String): AvailabilityResponse
+    increaseLocalTravelAvailability(localTravelId: ID!, date: String!, quantity: Int!, classType: String): AvailabilityResponse
     createLocalTravel(type: String!, provider: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): LocalTravel
     # Add other mutations as needed
   }
@@ -106,56 +110,41 @@ const LOCAL_TRAVEL_SERVICE_URL = 'http://localhost:3006/api/local-travel';
 
 const resolvers = {
   Query: {
-    // Explicit resolver for /search endpoint
-    async searchLocalTravels(_, { origin, destination, date }) {
-      const queryParams = new URLSearchParams();
-      if (origin) queryParams.append('origin', origin);
-      if (destination) queryParams.append('destination', destination);
-      if (date) queryParams.append('date', date);
-      const url = `${LOCAL_TRAVEL_SERVICE_URL}/search?${queryParams.toString()}`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Local Travel service request failed (searchLocalTravels) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch searched local travels from service. Status: ${res.status}`);
-        }
-        const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          return [];
-        }
-        // Map local travel data to GraphQL LocalTravel type
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(travel => ({
-              id: travel.id,
-              name: travel.name || travel.provider || travel.operator_name || null,
-              type: travel.type || null,
-              provider: travel.provider || travel.operator_name || null,
-              origin: travel.origin_city || travel.origin_kabupaten || travel.origin_province || travel.origin || null,
-              destination: travel.destination_city || travel.destination_kabupaten || travel.destination_province || travel.destination || null,
-              departure_time: travel.departure_time || null,
-              arrival_time: travel.arrival_time || null,
-              price: travel.price !== undefined ? parseFloat(travel.price) : null,
-              seats_available: travel.seats_available !== undefined ? parseInt(travel.seats_available, 10) : (travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null),
-              vehicle_model: travel.vehicle_model || travel.vehicle_type || null,
-              origin_province: travel.origin_province || null,
-              destination_province: travel.destination_province || null,
-              origin_kabupaten: travel.origin_kabupaten || null,
-              destination_kabupaten: travel.destination_kabupaten || null,
-              route: travel.route || null,
-              capacity: travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null,
-              class_type: travel.class_type || null,
-              has_ac: travel.has_ac,
-              has_wifi: travel.has_wifi,
-            }))
-          : [];
-      } catch (error) {
-        // TODO: Add monitoring/logging for searchLocalTravels errors
-        throw new Error('An error occurred while fetching searched local travels: ' + error.message);
-      }
+    // Refactored localTravels resolver: supports only pagination
+    async localTravels(_, { pagination = {} }) {
+      const query = Object.entries(pagination)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      const url = `${LOCAL_TRAVEL_SERVICE_URL}${query ? `?${query}` : ''}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status !== 'success') return [];
+      return (data.data || []).map(travel => ({
+        id: travel.id,
+        name: travel.name || travel.provider || travel.operator_name || null,
+        type: travel.type || null,
+        provider: travel.provider || travel.operator_name || null,
+        origin: travel.origin_city || travel.origin_kabupaten || travel.origin_province || travel.origin || null,
+        destination: travel.destination_city || travel.destination_kabupaten || travel.destination_province || travel.destination || null,
+        departure_time: travel.departure_time || null,
+        arrival_time: travel.arrival_time || null,
+        price: travel.price !== undefined ? parseFloat(travel.price) : null,
+        seats_available: travel.seats_available !== undefined ? parseInt(travel.seats_available, 10) : (travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null),
+        vehicle_model: travel.vehicle_model || travel.vehicle_type || null,
+        origin_province: travel.origin_province || null,
+        destination_province: travel.destination_province || null,
+        origin_kabupaten: travel.origin_kabupaten || null,
+        destination_kabupaten: travel.destination_kabupaten || null,
+        route: travel.route || null,
+        capacity: travel.capacity !== undefined ? parseInt(travel.capacity, 10) : null,
+        class_type: travel.class_type || null,
+        has_ac: travel.has_ac,
+        has_wifi: travel.has_wifi,
+      }));
     },
     // Explicit resolver for /:id/pricing endpoint
-    async localTravelPricing(_, { id, date }) {
+     async localTravelPricing(_, { id, date }) {
       const queryParams = new URLSearchParams();
       if (date) queryParams.append('date', date);
       const url = `${LOCAL_TRAVEL_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
@@ -170,7 +159,7 @@ const resolvers = {
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
           return [];
         }
-        // Map pricing data to a suitable GraphQL type (adjust as needed)
+        // Always return an array of Pricing objects
         return Array.isArray(serviceResponse.data)
           ? serviceResponse.data.map(price => ({
               seatClass: price.seat_class || null,
@@ -178,7 +167,7 @@ const resolvers = {
               currency: price.currency || 'IDR',
               date: price.date || null,
             }))
-          : [];
+          : serviceResponse.data ? [serviceResponse.data] : [];
       } catch (error) {
         // TODO: Add monitoring/logging for localTravelPricing errors
         throw new Error('An error occurred while fetching local travel pricing: ' + error.message);
@@ -337,19 +326,74 @@ const resolvers = {
     }
   },
   Mutation: {
-    async createLocalTravel(_, { type, provider, origin, destination, departure_time, arrival_time, price, seats_available }) {
-      if (!type || !provider || !origin || !destination || !departure_time || !arrival_time || !price || !seats_available) {
-        throw new Error('All fields are required');
+    async decreaseLocalTravelAvailability(_, { localTravelId, date, quantity, classType }) {
+      if (!localTravelId || !date || !quantity) {
+        throw new Error('localTravelId, date, and quantity are required');
+      }
+      try {
+        const url = `${LOCAL_TRAVEL_SERVICE_URL}/${localTravelId}/availability/decrease`;
+        const body = { date, quantity };
+        if (classType) body.class_type = classType;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to decrease local travel availability');
+        return data;
+      } catch (err) {
+        throw new Error('Decrease local travel availability failed: ' + err.message);
+      }
+    },
+    async increaseLocalTravelAvailability(_, { localTravelId, date, quantity, classType }) {
+      if (!localTravelId || !date || !quantity) {
+        throw new Error('localTravelId, date, and quantity are required');
+      }
+      try {
+        const url = `${LOCAL_TRAVEL_SERVICE_URL}/${localTravelId}/availability/increase`;
+        const body = { date, quantity };
+        if (classType) body.class_type = classType;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to increase local travel availability');
+        return data;
+      } catch (err) {
+        throw new Error('Increase local travel availability failed: ' + err.message);
+      }
+    },
+    async createLocalTravel(_, args) {
+      // Map GraphQL args to LocalTravel microservice fields
+      const payload = {
+        type: args.type,
+        provider: args.provider,
+        origin_city: args.origin, // assuming 'origin' maps to 'origin_city'
+        destination_city: args.destination, // assuming 'destination' maps to 'destination_city'
+        departure_time: args.departure_time,
+        arrival_time: args.arrival_time,
+        price: args.price,
+        seats_available: args.seats_available
+        // Add more fields if your LocalTravel model expects them
+      };
+      // Validate required fields
+      for (const key of Object.keys(payload)) {
+        if (payload[key] === undefined || payload[key] === null) {
+          throw new Error(`Field '${key}' is required`);
+        }
       }
       try {
         const res = await fetch(LOCAL_TRAVEL_SERVICE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type, provider, origin, destination, departure_time, arrival_time, price, seats_available })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.status !== 'success') throw new Error(data.message || 'Failed to create local travel');
-        return data.data;
+        return { id: data.data.id, ...payload };
       } catch (err) {
         throw new Error('Local travel creation failed: ' + err.message);
       }

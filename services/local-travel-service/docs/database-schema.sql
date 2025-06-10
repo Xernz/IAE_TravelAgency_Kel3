@@ -1,6 +1,7 @@
 -- Local Travel Service Database Schema (Consumer Only)
 USE travel_local_travel_db;
 
+DROP TABLE IF EXISTS LocalTravel;
 CREATE TABLE IF NOT EXISTS LocalTravel (
     id INT AUTO_INCREMENT PRIMARY KEY,
     provider VARCHAR(64) NOT NULL,
@@ -15,11 +16,15 @@ CREATE TABLE IF NOT EXISTS LocalTravel (
     route VARCHAR(128), -- Detailed route information
     capacity INT, -- Number of passengers
     features TEXT, -- e.g., AC, WiFi, etc.
+    departure_time VARCHAR(32),
+    arrival_time VARCHAR(32),
+    vehicle_model VARCHAR(64),
     description TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+DROP TABLE IF EXISTS LocalTravelAvailability;
 CREATE TABLE IF NOT EXISTS LocalTravelAvailability (
     id INT AUTO_INCREMENT PRIMARY KEY,
     local_travel_id INT NOT NULL,
@@ -29,6 +34,7 @@ CREATE TABLE IF NOT EXISTS LocalTravelAvailability (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 -- Note: available_units is updated via /availability/decrease and /availability/increase endpoints for booking/cancellation.
 
+DROP TABLE IF EXISTS LocalTravelPricing;
 CREATE TABLE IF NOT EXISTS LocalTravelPricing (
     id INT AUTO_INCREMENT PRIMARY KEY,
     local_travel_id INT NOT NULL,
@@ -40,17 +46,17 @@ CREATE TABLE IF NOT EXISTS LocalTravelPricing (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Sample Data
-INSERT INTO LocalTravel (provider, operator_name, type, origin_city, destination_city, origin_kabupaten, destination_kabupaten, origin_province, destination_province, route, capacity, features, description) VALUES
-('Blue Bird', 'PT. Blue Bird Tbk', 'Taksi', 'Jakarta', 'Jakarta', 'Jakarta Pusat', 'Jakarta Selatan', 'DKI Jakarta', 'DKI Jakarta', NULL, 4, 'AC, Mobile App Booking, Argo Meter', 'Layanan taksi premium di Jakarta'),
-('TransJakarta', 'PT. Transportasi Jakarta', 'Bus Kota', 'Jakarta', 'Jakarta', 'Jakarta Pusat', 'Jakarta Barat', 'DKI Jakarta', 'DKI Jakarta', 'Koridor 1: Blok M - Kota', 85, 'AC, Jalur Khusus, Halte Permanen', 'Sistem bus rapid transit di Jakarta'),
-('Sinar Jaya', 'PT. Sinar Jaya Megah Langgeng', 'Inter-City Bus', 'Jakarta', 'Bandung', 'Jakarta Barat', 'Bandung', 'DKI Jakarta', 'Jawa Barat', 'Jakarta - Bandung via Puncak', 40, 'AC, Kursi Reclining, Toilet, WiFi', 'Layanan bus antar kota'),
-('Damri', 'Perum DAMRI', 'Shuttle', 'Tangerang', 'Jakarta', 'Tangerang', 'Jakarta Pusat', 'Banten', 'DKI Jakarta', 'Bandara Soekarno-Hatta - Gambir', 20, 'AC, Ruang Bagasi, WiFi', 'Layanan shuttle resmi bandara'),
-('Gojek', 'PT. Aplikasi Karya Anak Bangsa', 'Ojek', 'Jakarta', 'Jakarta', 'Jakarta Selatan', 'Jakarta Selatan', 'DKI Jakarta', 'DKI Jakarta', NULL, 1, 'Aplikasi Mobile, Helm Disediakan, Masker', 'Layanan ojek online via aplikasi'),
-('Grab', 'PT. Grab Indonesia', 'Travel', 'Yogyakarta', 'Semarang', 'Yogyakarta', 'Semarang', 'DI Yogyakarta', 'Jawa Tengah', 'Yogyakarta - Semarang via Magelang', 4, 'Aplikasi Mobile, Pilihan Mobil Beragam', 'Layanan travel antar kota'),
-('Kopaja', 'Koperasi Angkutan Jakarta', 'Angkot', 'Jakarta', 'Jakarta', 'Jakarta Selatan', 'Jakarta Timur', 'DKI Jakarta', 'DKI Jakarta', 'Blok M - Kampung Melayu', 12, 'Tarif Terjangkau', 'Angkutan kota tradisional'),
-('Trac', 'PT. Serasi Autoraya', 'Rental Mobil', 'Bali', 'Bali', 'Badung', 'Badung', 'Bali', 'Bali', NULL, 5, 'AC, Pilihan Mobil Beragam, Sopir/Lepas Kunci', 'Layanan sewa mobil dengan/tanpa sopir'),
-('Xtrans', 'PT. Batavia Prosperindo Trans', 'Travel', 'Jakarta', 'Bandung', 'Jakarta Selatan', 'Bandung', 'DKI Jakarta', 'Jawa Barat', 'Jakarta (Pondok Indah) - Bandung (Pasteur)', 8, 'AC, Kursi Nyaman, WiFi, USB Charging', 'Layanan travel premium Jakarta-Bandung'),
-('Pahala Kencana', 'PT. Pahala Kencana', 'Inter-City Bus', 'Jakarta', 'Surabaya', 'Jakarta Timur', 'Surabaya', 'DKI Jakarta', 'Jawa Timur', 'Jakarta - Surabaya via Pantura', 40, 'AC, Toilet, Selimut, Bantal, Makan', 'Bus AKAP kelas eksekutif');
+INSERT INTO LocalTravel (provider, operator_name, type, origin_city, destination_city, origin_kabupaten, destination_kabupaten, origin_province, destination_province, route, capacity, features, departure_time, arrival_time, vehicle_model, description) VALUES
+('Blue Bird', 'PT. Blue Bird Tbk', 'Taksi', 'Jakarta', 'Jakarta', 'Jakarta Pusat', 'Jakarta Selatan', 'DKI Jakarta', 'DKI Jakarta', NULL, 4, 'AC, Mobile App Booking, Argo Meter', '08:00', '08:30', 'Toyota Alphard', 'Layanan taksi premium di Jakarta'),
+('TransJakarta', 'PT. Transportasi Jakarta', 'Bus Kota', 'Jakarta', 'Jakarta', 'Jakarta Pusat', 'Jakarta Barat', 'DKI Jakarta', 'DKI Jakarta', 'Koridor 1: Blok M - Kota', 85, 'AC, Jalur Khusus, Halte Permanen', '06:00', '23:00', 'Mercedes-Benz OH 1626', 'Sistem bus rapid transit di Jakarta'),
+('Sinar Jaya', 'PT. Sinar Jaya Megah Langgeng', 'Inter-City Bus', 'Jakarta', 'Bandung', 'Jakarta Barat', 'Bandung', 'DKI Jakarta', 'Jawa Barat', 'Jakarta - Bandung via Puncak', 40, 'AC, Kursi Reclining, Toilet, WiFi', '07:00', '11:00', 'Hino RK8', 'Layanan bus antar kota'),
+('Damri', 'Perum DAMRI', 'Shuttle', 'Tangerang', 'Jakarta', 'Tangerang', 'Jakarta Pusat', 'Banten', 'DKI Jakarta', 'Bandara Soekarno-Hatta - Gambir', 20, 'AC, Ruang Bagasi, WiFi', '05:00', '06:00', 'Isuzu ELF', 'Layanan shuttle resmi bandara'),
+('Gojek', 'PT. Aplikasi Karya Anak Bangsa', 'Ojek', 'Jakarta', 'Jakarta', 'Jakarta Selatan', 'Jakarta Selatan', 'DKI Jakarta', 'DKI Jakarta', NULL, 1, 'Aplikasi Mobile, Helm Disediakan, Masker', 'Anytime', 'Anytime', 'Honda Vario', 'Layanan ojek online via aplikasi'),
+('Grab', 'PT. Grab Indonesia', 'Travel', 'Yogyakarta', 'Semarang', 'Yogyakarta', 'Semarang', 'DI Yogyakarta', 'Jawa Tengah', 'Yogyakarta - Semarang via Magelang', 4, 'Aplikasi Mobile, Pilihan Mobil Beragam', '09:00', '12:00', 'Toyota Innova', 'Layanan travel antar kota'),
+('Kopaja', 'Koperasi Angkutan Jakarta', 'Angkot', 'Jakarta', 'Jakarta', 'Jakarta Selatan', 'Jakarta Timur', 'DKI Jakarta', 'DKI Jakarta', 'Blok M - Kampung Melayu', 12, 'Tarif Terjangkau', '05:30', '22:00', 'Mitsubishi Colt Diesel', 'Angkutan kota tradisional'),
+('Trac', 'PT. Serasi Autoraya', 'Rental Mobil', 'Bali', 'Bali', 'Badung', 'Badung', 'Bali', 'Bali', NULL, 5, 'AC, Pilihan Mobil Beragam, Sopir/Lepas Kunci', '08:00', '12:00', 'Toyota Innova', 'Layanan sewa mobil dengan/tanpa sopir'),
+('Xtrans', 'PT. Batavia Prosperindo Trans', 'Travel', 'Jakarta', 'Bandung', 'Jakarta Selatan', 'Bandung', 'DKI Jakarta', 'Jawa Barat', 'Jakarta (Pondok Indah) - Bandung (Pasteur)', 8, 'AC, Kursi Nyaman, WiFi, USB Charging', '07:00', '11:00', 'Toyota Innova', 'Layanan travel premium Jakarta-Bandung'),
+('Pahala Kencana', 'PT. Pahala Kencana', 'Inter-City Bus', 'Jakarta', 'Surabaya', 'Jakarta Timur', 'Surabaya', 'DKI Jakarta', 'Jawa Timur', 'Jakarta - Surabaya via Pantura', 40, 'AC, Toilet, Selimut, Bantal, Makan', '06:00', '10:00', 'Toyota Innova', 'Bus AKAP kelas eksekutif');
 
 INSERT INTO LocalTravelAvailability (local_travel_id, date, available_units) VALUES
 (1, '2025-06-10', 25),

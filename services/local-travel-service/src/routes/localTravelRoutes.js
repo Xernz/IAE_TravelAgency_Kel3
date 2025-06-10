@@ -4,6 +4,10 @@ const localTravelController = require('../controllers/localTravelController');
 
 // List all local travel options
 router.get('/', localTravelController.listAllLocalTravel);
+// Create a new local travel entry (admin/dev only)
+router.post('/', localTravelController.createLocalTravel);
+// Update an existing local travel entry (admin/dev only)
+router.put('/:id', localTravelController.updateLocalTravel);
 
 // Filter local travel options with multiple criteria
 router.get('/filter', localTravelController.filterLocalTravel);

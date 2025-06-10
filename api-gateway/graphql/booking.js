@@ -11,12 +11,29 @@ const typeDefs = gql`
     items: [BookingItem!]!
     created_at: String!
     status: String
+    # Backend fields available:
+    booking_code: String # present in filter, TODO: ensure always returned in all queries
+    payment_status: String # present in filter, TODO: ensure always returned in all queries
+    # The following fields are not present in backend yet, add TODOs for future DB migration:
+    total_amount: Float # TODO: add to backend and map
+    currency: String # TODO: add to backend and map
+    special_requests: String # TODO: add to backend and map
+    updated_at: String # TODO: add to backend and map
   }
   type BookingItem {
     id: ID!
     type: String!
     ref_id: ID!
-    date: String
+    travel_date: String # backend field (was date)
+    quantity: Int
+    unit_price: Float
+    subtotal: Float
+    origin_city: String
+    destination_city: String
+    origin_province: String
+    destination_province: String
+    service_class: String
+    provider: String
     details: JSON
   }
   type Query {
@@ -61,9 +78,30 @@ const resolvers = {
       return data.data.map(booking => ({
         id: booking.id,
         user_id: booking.user_id || null,
-        items: booking.items || [],
+        items: (booking.items || []).map(item => ({
+          id: item.id,
+          type: item.type,
+          ref_id: item.ref_id,
+          travel_date: item.travel_date || item.date || null,
+          quantity: item.quantity || null,
+          unit_price: item.unit_price || null,
+          subtotal: item.subtotal || null,
+          origin_city: item.origin_city || null,
+          destination_city: item.destination_city || null,
+          origin_province: item.origin_province || null,
+          destination_province: item.destination_province || null,
+          service_class: item.service_class || null,
+          provider: item.provider || null,
+          details: item.details || null
+        })),
         created_at: booking.created_at || null,
         status: booking.status || null,
+        booking_code: booking.booking_code || null,
+        payment_status: booking.payment_status || null,
+        total_amount: booking.total_amount || null,
+        currency: booking.currency || null,
+        special_requests: booking.special_requests || null,
+        updated_at: booking.updated_at || null
       }));
     }
   },
@@ -240,8 +278,8 @@ const resolvers = {
       return true;
     },
     async modifyBooking(_, { bookingId, items }) {
-      const res = await fetch(`${BOOKING_SERVICE_URL}/${bookingId}/modify`, {
-        method: 'POST',
+      const res = await fetch(`${BOOKING_SERVICE_URL}/${bookingId}`, {
+        method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items })
       });

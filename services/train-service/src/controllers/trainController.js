@@ -1,5 +1,15 @@
 const Train = require('../models/Train');
 
+// Create a new Train entry
+exports.createTrain = (req, res) => {
+  const data = req.body;
+  Train.create(data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to create train', details: err.message });
+    // Fetch the created entry by insertId (optional: for now just return id)
+    res.status(201).json({ status: 'success', data: { id: result.insertId } });
+  });
+};
+
 exports.searchTrains = (req, res) => {
   const { origin_station_code, destination_station_code, origin_city, destination_city, origin_province, destination_province } = req.query;
   Train.search({ origin_station_code, destination_station_code, origin_city, destination_city, origin_province, destination_province }, (err, trains) => {
@@ -96,10 +106,19 @@ exports.getAvailability = (req, res) => {
 
 exports.getPricing = (req, res) => {
   const id = req.params.id;
-  const { date } = req.query;
+  const { date, seatClass } = req.query;
   if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  Train.getPricing(id, date, (err, pricing) => {
-    res.json({ status: 'success', data: pricing ? { price: pricing.price, currency: pricing.currency } : null });
+  Train.getPricing(id, date, seatClass, (err, pricing) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Pricing query failed', details: err.message });
+    if (!pricing || (Array.isArray(pricing) && pricing.length === 0)) return res.status(404).json({ status: 'error', message: 'No pricing found' });
+    const result = Array.isArray(pricing) ? pricing : [pricing];
+    const mapped = result.map(row => ({
+      price: row.price,
+      currency: row.currency || 'IDR',
+      date: row.date || null,
+      seat_class: row.seat_class || row.class_type || row.train_class || null
+    }));
+    res.json({ status: 'success', data: mapped });
   });
 };
 

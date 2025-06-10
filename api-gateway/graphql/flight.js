@@ -53,6 +53,11 @@ const typeDefs = gql`
     hasPrevPage: Boolean
   }
 
+  type AvailabilityResponse {
+    status: String!
+    message: String    affectedRows: Int
+  }
+
   type FlightsPage {
     flights: [Flight!]!
     pagination: PaginationInfo
@@ -60,14 +65,11 @@ const typeDefs = gql`
 
   type Query {
     # Existing queries
-    flights(origin: String, destination: String, date: String): [Flight]
+    flights(pagination: PaginationInput): [Flight]
     flight(id: ID!): Flight
 
-    # Search flights query
-    searchFlights(origin: String, destination: String, date: String): [Flight]
-
     # Pricing query for a specific flight
-    flightPricing(id: ID!, date: String): Pricing
+    flightPricing(id: ID!, date: String): [Pricing]
 
     # New filter query
     filterFlights(
@@ -78,6 +80,8 @@ const typeDefs = gql`
   }
 
   type Mutation {
+    decreaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
+    increaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
     createFlight(airline: String!, flight_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Flight
     # Add other mutations as needed
   }
@@ -94,45 +98,31 @@ const FLIGHT_SERVICE_URL = 'http://localhost:3002/api/flights';
 
 const resolvers = {
   Query: {
-    // Explicit resolver for /search endpoint
-    async searchFlights(_, { origin, destination, date }) {
-      const queryParams = new URLSearchParams();
-      if (origin) queryParams.append('origin', origin);
-      if (destination) queryParams.append('destination', destination);
-      if (date) queryParams.append('date', date);
-      const url = `${FLIGHT_SERVICE_URL}/search?${queryParams.toString()}`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Flight service request failed (searchFlights) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch searched flights from service. Status: ${res.status}`);
-        }
-        const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          return [];
-        }
-        // Map flight data to GraphQL Flight type
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(flight => ({
-              id: flight.id,
-              airline: flight.airline || null,
-              flight_number: flight.flight_number || flight.flight_no || null,
-              origin: flight.origin || flight.origin_city || null,
-              destination: flight.destination || flight.destination_city || null,
-              departure_time: flight.departure_time || null,
-              arrival_time: flight.arrival_time || null,
-              price: flight.price !== undefined ? parseFloat(flight.price) : null,
-              seats_available: flight.seats_available !== undefined ? parseInt(flight.seats_available, 10) : null,
-            }))
-          : [];
-      } catch (error) {
-        // TODO: Add monitoring/logging for searchFlights errors
-        throw new Error('An error occurred while fetching searched flights: ' + error.message);
-      }
+    // Refactored flights resolver: supports only pagination
+    async flights(_, { pagination = {} }) {
+      const query = Object.entries(pagination)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      const url = `${FLIGHT_SERVICE_URL}${query ? `?${query}` : ''}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status !== 'success') return [];
+      const flightsData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.flights) ? data.data.flights : []);
+      return flightsData.map(flight => ({
+        id: flight.id,
+        airline: flight.airline || null,
+        flight_number: flight.flight_number || flight.flight_no || null,
+        origin: flight.origin || flight.origin_city || null,
+        destination: flight.destination || flight.destination_city || null,
+        departure_time: flight.departure_time || null,
+        arrival_time: flight.arrival_time || null,
+        price: flight.price !== undefined ? parseFloat(flight.price) : null,
+        seats_available: flight.seats_available !== undefined ? parseInt(flight.seats_available, 10) : null,
+      }));
     },
     // Explicit resolver for /:id/pricing endpoint
-    async flightPricing(_, { id, date }) {
+     async flightPricing(_, { id, date }) {
       const queryParams = new URLSearchParams();
       if (date) queryParams.append('date', date);
       const url = `${FLIGHT_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
@@ -147,7 +137,7 @@ const resolvers = {
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
           return [];
         }
-        // Map pricing data to a suitable GraphQL type (adjust as needed)
+        // Always return an array of Pricing objects
         return Array.isArray(serviceResponse.data)
           ? serviceResponse.data.map(price => ({
               seatClass: price.seat_class || null,
@@ -155,7 +145,7 @@ const resolvers = {
               currency: price.currency || 'IDR',
               date: price.date || null,
             }))
-          : [];
+          : serviceResponse.data ? [serviceResponse.data] : [];
       } catch (error) {
         // TODO: Add monitoring/logging for flightPricing errors
         throw new Error('An error occurred while fetching flight pricing: ' + error.message);
@@ -302,6 +292,46 @@ const resolvers = {
     }
   },
   Mutation: {
+    async decreaseFlightAvailability(_, { flightId, date, quantity, seatClass }) {
+      if (!flightId || !date || !quantity) {
+        throw new Error('flightId, date, and quantity are required');
+      }
+      try {
+        const url = `${FLIGHT_SERVICE_URL}/${flightId}/availability/decrease`;
+        const body = { date, quantity };
+        if (seatClass) body.seat_class = seatClass;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to decrease flight availability');
+        return data;
+      } catch (err) {
+        throw new Error('Decrease flight availability failed: ' + err.message);
+      }
+    },
+    async increaseFlightAvailability(_, { flightId, date, quantity, seatClass }) {
+      if (!flightId || !date || !quantity) {
+        throw new Error('flightId, date, and quantity are required');
+      }
+      try {
+        const url = `${FLIGHT_SERVICE_URL}/${flightId}/availability/increase`;
+        const body = { date, quantity };
+        if (seatClass) body.seat_class = seatClass;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to increase flight availability');
+        return data;
+      } catch (err) {
+        throw new Error('Increase flight availability failed: ' + err.message);
+      }
+    },
     async createFlight(_, { airline, flight_number, origin, destination, departure_time, arrival_time, price, seats_available }) {
       if (!airline || !flight_number || !origin || !destination || !departure_time || !arrival_time || !price || !seats_available) {
         throw new Error('All fields are required');

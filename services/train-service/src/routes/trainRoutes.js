@@ -4,6 +4,8 @@ const trainController = require('../controllers/trainController');
 
 // List all trains
 router.get('/', trainController.listAllTrains);
+// Create a new train entry (admin/dev only)
+router.post('/', trainController.createTrain);
 
 // Filter trains with multiple criteria
 router.get('/filter', trainController.filterTrains);

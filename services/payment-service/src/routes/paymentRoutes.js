@@ -8,5 +8,7 @@ router.post('/', paymentController.initiatePayment);
 router.get('/:id/status', paymentController.getPaymentStatus);
 // Get user payment history
 router.get('/user/:userId', paymentController.getUserPayments);
+// Get payments by booking ID
+router.get('/booking/:bookingId', paymentController.getPaymentsByBookingId);
 
 module.exports = router;

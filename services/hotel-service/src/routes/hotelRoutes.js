@@ -4,12 +4,15 @@ const hotelController = require('../controllers/hotelController');
 
 // List all hotels
 router.get('/', hotelController.listAllHotels);
+// Create a new hotel entry (admin/dev only)
+router.post('/', hotelController.createHotel);
+// Update an existing hotel entry (admin/dev only)
+router.put('/:id', hotelController.updateHotel);
 
 // Filter hotels with multiple criteria
 router.get('/filter', hotelController.filterHotels);
 
-// Search hotels (basic search with city/province)
-router.get('/search', hotelController.searchHotels);
+// [DEPRECATED] /search endpoint removed in favor of /filter. Use /filter for all hotel search and filtering.
 
 // Get hotel details
 router.get('/:id', hotelController.getHotelDetails);

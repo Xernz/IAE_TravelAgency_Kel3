@@ -26,3 +26,14 @@ exports.getUserPayments = (req, res) => {
     res.json({ status: 'success', data: payments });
   });
 };
+
+exports.getPaymentsByBookingId = (req, res) => {
+  const bookingId = req.params.bookingId;
+  if (!bookingId) {
+    return res.status(400).json({ status: 'error', message: 'Missing bookingId parameter' });
+  }
+  Payment.getPaymentsByBookingId(bookingId, (err, payments) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to fetch payments by bookingId' });
+    res.json({ status: 'success', data: payments });
+  });
+};

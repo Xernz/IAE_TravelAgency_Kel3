@@ -1,5 +1,33 @@
 const Flight = require('../models/Flight');
 
+// Create a new Flight entry
+exports.createFlight = (req, res) => {
+  const data = req.body;
+  Flight.create(data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to create flight', details: err.message });
+    // Fetch the created entry by insertId
+    Flight.getById(result.insertId, (err2, created) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Created but failed to retrieve', details: err2.message });
+      res.status(201).json({ status: 'success', data: created });
+    });
+  });
+};
+
+// Update an existing Flight entry
+exports.updateFlight = (req, res) => {
+  const id = req.params.id;
+  const data = req.body;
+  Flight.update(id, data, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to update flight', details: err.message });
+    if (result.affectedRows === 0) return res.status(404).json({ status: 'error', message: 'Flight not found or no changes made' });
+    // Fetch the updated entry
+    Flight.getById(id, (err2, updated) => {
+      if (err2) return res.status(500).json({ status: 'error', message: 'Updated but failed to retrieve', details: err2.message });
+      res.json({ status: 'success', data: updated });
+    });
+  });
+};
+
 // Decrease flight seat availability (booking)
 exports.decreaseAvailability = (req, res) => {
   const flightId = req.params.id;
@@ -113,10 +141,18 @@ exports.getAvailability = (req, res) => {
 
 exports.getPricing = (req, res) => {
   const id = req.params.id;
-  const date = req.query.date;
+  const { date, seatClass } = req.query;
   if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  Flight.getPricing(id, date, (err, pricing) => {
-    if (!pricing) return res.status(404).json({ status: 'error', message: 'No pricing found' });
-    res.json({ status: 'success', data: pricing });
+  Flight.getPricing(id, date, seatClass, (err, pricing) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Pricing query failed', details: err.message });
+    if (!pricing || (Array.isArray(pricing) && pricing.length === 0)) return res.status(404).json({ status: 'error', message: 'No pricing found' });
+    const result = Array.isArray(pricing) ? pricing : [pricing];
+    const mapped = result.map(row => ({
+      price: row.price,
+      currency: row.currency || 'IDR',
+      date: row.travel_date || row.date || null,
+      seat_class: row.seat_class || row.class_type || row.flight_class || null
+    }));
+    res.json({ status: 'success', data: mapped });
   });
 };

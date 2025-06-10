@@ -16,5 +16,10 @@ router.get('/:id', bookingController.getBookingById);
 
 // Create booking
 router.post('/', bookingController.createBooking);
+// Cancel booking
+router.post('/:id/cancel', bookingController.cancelBooking);
+
+// Modify booking
+router.put('/:id', bookingController.modifyBooking);
 
 module.exports = router;

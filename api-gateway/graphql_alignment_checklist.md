@@ -36,8 +36,7 @@ This document provides a comprehensive, step-by-step procedure to verify and ens
         1.  **CRITICAL MISALIGNMENT (Missing REST Endpoint & Controller Logic for `createTrain`)**: The `createTrain` GraphQL mutation resolves to `POST http://localhost:3001/api/trains`. However, `trainRoutes.js` does not define this route, and `trainController.js` has no corresponding `createTrain` function.
             - *Action*: Add `router.post('/', trainController.createTrain);` to `trainRoutes.js` and implement `createTrain` in `trainController.js` (including model interaction for creating a new train record).
 
-        2.  **MISSING GraphQL Mutations for Core Functionality (Controller Ready)**: REST endpoints `POST /:id/availability/decrease` and `increase` exist, and `trainController.js` has `decreaseAvailability` and `increaseAvailability` functions that appear suitable (take trainId, date, quantity). However, no corresponding GraphQL mutations are defined.
-            - *Action*: Define `decreaseTrainAvailability` and `increaseTrainAvailability` mutations in `api-gateway/graphql/train.js` and their resolvers, calling these existing REST endpoints.
+        2.  **GraphQL Mutations for Core Functionality (Controller Ready) [COMPLETED 2025-06-10]:** REST endpoints `POST /:id/availability/decrease` and `increase` exist, and `trainController.js` has `decreaseAvailability` and `increaseAvailability` functions. Corresponding GraphQL mutations `decreaseTrainAvailability` and `increaseTrainAvailability` are now implemented in `api-gateway/graphql/train.js` and correctly mapped to these REST endpoints.
 
         3.  **CRITICAL MISALIGNMENT & REDUNDANCY (`Query.trains` vs. `Query.filterTrains`)**:
             - The `Query.trains` GraphQL resolver dynamically appends all `args` as query parameters to `GET http://localhost:3001/api/trains`.
@@ -81,8 +80,7 @@ This document provides a comprehensive, step-by-step procedure to verify and ens
         1.  **CRITICAL MISALIGNMENT (Missing REST Endpoint & Controller Logic for `createFlight`)**: The `createFlight` GraphQL mutation resolves to `POST http://localhost:3003/api/flights`. However, `flightRoutes.js` does not define this route, and `flightController.js` has no corresponding `createFlight` function.
             - *Action*: Add `router.post('/', flightController.createFlight);` to `flightRoutes.js` and implement `createFlight` in `flightController.js` (including model interaction).
 
-        2.  **MISSING GraphQL Mutations for Core Functionality (Controller Ready)**: REST endpoints `POST /:id/availability/decrease` and `increase` exist, and `flightController.js` has `decreaseAvailability` and `increaseAvailability` functions. No corresponding GraphQL mutations defined.
-            - *Action*: Define `decreaseFlightAvailability` and `increaseFlightAvailability` mutations in `api-gateway/graphql/flight.js` and their resolvers.
+        2.  **GraphQL Mutations for Core Functionality (Controller Ready) [COMPLETED 2025-06-10]:** REST endpoints `POST /:id/availability/decrease` and `increase` exist, and `flightController.js` has `decreaseAvailability` and `increaseAvailability` functions. Corresponding GraphQL mutations `decreaseFlightAvailability` and `increaseFlightAvailability` are now implemented in `api-gateway/graphql/flight.js` and correctly mapped to these REST endpoints.
 
         3.  **PARTIAL MISALIGNMENT & REDUNDANCY (`Query.flights` vs. `Query.filterFlights` vs. `Query.searchFlights`)**:
             - `Query.flights` resolver behavior:

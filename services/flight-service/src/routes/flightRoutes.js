@@ -4,6 +4,10 @@ const flightController = require('../controllers/flightController');
 
 // List all flights
 router.get('/', flightController.listAllFlights);
+// Create a new flight entry (admin/dev only)
+router.post('/', flightController.createFlight);
+// Update an existing flight entry (admin/dev only)
+router.put('/:id', flightController.updateFlight);
 
 // Filter flights with multiple criteria
 router.get('/filter', flightController.filterFlights);

@@ -86,20 +86,68 @@ exports.filterBookings = (req, res) => {
   });
 };
 
-exports.createBooking = (req, res) => {
-  const { userId, items } = req.body;
-  if (!userId || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ status: 'error', message: 'Missing userId or items' });
+exports.cancelBooking = (req, res) => {
+  const id = req.params.id;
+  if (!id) {
+    return res.status(400).json({ status: 'error', message: 'Missing booking id' });
   }
-  Booking.create(userId, (err, result) => {
+  Booking.cancel(id, (err, result) => {
+    if (err) return res.status(500).json({ status: 'error', message: 'Failed to cancel booking' });
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ status: 'error', message: 'Booking not found' });
+    }
+    res.json({ status: 'success', message: 'Booking cancelled' });
+  });
+};
+
+exports.createBooking = (req, res) => {
+  // Accept all possible booking fields from the request body
+  const {
+    user_id,
+    items,
+    booking_code,
+    total_amount,
+    currency,
+    payment_status,
+    special_requests,
+    status // optional, default to 'active'
+  } = req.body;
+
+  if (!user_id || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ status: 'error', message: 'Missing user_id or items' });
+  }
+
+  // TODO: If frontend doesn't supply some fields, set defaults or compute as needed
+  Booking.create({
+    user_id,
+    booking_code,
+    total_amount,
+    currency,
+    payment_status,
+    special_requests,
+    status
+  }, (err, result) => {
     if (err) return res.status(500).json({ status: 'error', message: 'Failed to create booking' });
     const bookingId = result.insertId;
     let pending = items.length;
-    if (pending === 0) return res.json({ status: 'success', data: { id: bookingId, items: [] } });
+    if (pending === 0) {
+      // Fetch and return the full booking record
+      return Booking.getById(bookingId, (err, booking) => {
+        if (err || !booking) return res.status(500).json({ status: 'error', message: 'Failed to fetch booking after creation' });
+        return res.json({ status: 'success', data: { ...booking, items: [] } });
+      });
+    }
+    // Insert booking items
     items.forEach(item => {
       BookingItem.create(bookingId, item, (err, itemResult) => {
         if (--pending === 0) {
-          res.json({ status: 'success', data: { id: bookingId } });
+          // Fetch and return the full booking record with items
+          Booking.getById(bookingId, (err, booking) => {
+            if (err || !booking) return res.status(500).json({ status: 'error', message: 'Failed to fetch booking after creation' });
+            BookingItem.getByBookingId(bookingId, (err, allItems) => {
+              return res.json({ status: 'success', data: { ...booking, items: allItems || [] } });
+            });
+          });
         }
       });
     });

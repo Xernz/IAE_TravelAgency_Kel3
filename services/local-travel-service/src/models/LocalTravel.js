@@ -1,7 +1,46 @@
 const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
+// Utility to parse features string into boolean flags
+function parseFeatures(features) {
+  if (!features) return { has_ac: false, has_wifi: false };
+  const normalized = features.toLowerCase();
+  return {
+    has_ac: normalized.includes('ac'),
+    has_wifi: normalized.includes('wifi')
+  };
+}
+
 const LocalTravel = {
+  // Create a new LocalTravel entry
+  create: (data, callback) => {
+    const {
+      provider, operator_name, type, origin_city, destination_city, origin_kabupaten, destination_kabupaten,
+      origin_province, destination_province, route, capacity, features, departure_time, arrival_time, vehicle_model, description
+    } = data;
+    const sql = `INSERT INTO LocalTravel (provider, operator_name, type, origin_city, destination_city, origin_kabupaten, destination_kabupaten, origin_province, destination_province, route, capacity, features, departure_time, arrival_time, vehicle_model, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const values = [provider, operator_name, type, origin_city, destination_city, origin_kabupaten, destination_kabupaten, origin_province, destination_province, route, capacity, features, departure_time, arrival_time, vehicle_model, description];
+    db.query(sql, values, callback);
+  },
+  // Update an existing LocalTravel entry
+  update: (id, data, callback) => {
+    const fields = [];
+    const values = [];
+    [
+      'provider', 'operator_name', 'type', 'origin_city', 'destination_city', 'origin_kabupaten', 'destination_kabupaten',
+      'origin_province', 'destination_province', 'route', 'capacity', 'features', 'departure_time', 'arrival_time', 'vehicle_model', 'description'
+    ].forEach(field => {
+      if (data[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(data[field]);
+      }
+    });
+    if (fields.length === 0) return callback(null, { affectedRows: 0 });
+    const sql = `UPDATE LocalTravel SET ${fields.join(', ')} WHERE id = ?`;
+    values.push(id);
+    db.query(sql, values, callback);
+  },
+
   // Decrease local travel unit availability
   decreaseAvailability: (localTravelId, date, quantity, callback) => {
     db.query(
@@ -31,7 +70,11 @@ const LocalTravel = {
     if (origin_city) { sql += ' AND origin_city = ?'; values.push(origin_city); }
     if (destination_city) { sql += ' AND destination_city = ?'; values.push(destination_city); }
     if (route) { sql += ' AND route LIKE ?'; values.push(`%${route}%`); }
-    db.query(sql, values, (err, results) => callback(err, results));
+    db.query(sql, values, (err, results) => {
+      if (err) return callback(err);
+      const enriched = results.map(row => ({ ...row, ...parseFeatures(row.features) }));
+      callback(null, enriched);
+    });
   },
   
   listAll: (params, callback) => {
@@ -53,9 +96,10 @@ const LocalTravel = {
       // Then execute the paginated query
       db.query(sql, values, (err, results) => {
         if (err) return callback(err, null);
-        
+        // Add has_ac and has_wifi fields
+        const enriched = results.map(row => ({ ...row, ...parseFeatures(row.features) }));
         // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
+        const response = paginatedResponse(enriched, pagination, totalItems);
         callback(null, response);
       });
     });
@@ -154,15 +198,22 @@ const LocalTravel = {
       // Then execute the paginated query
       db.query(sql, allValues, (err, results) => {
         if (err) return callback(err, null);
-        
+        // Add has_ac and has_wifi fields
+        const enriched = results.map(row => ({ ...row, ...parseFeatures(row.features) }));
         // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
+        const response = paginatedResponse(enriched, pagination, totalItems);
         callback(null, response);
       });
     });
   },
   getById: (id, callback) => {
-    db.query('SELECT * FROM LocalTravel WHERE id = ?', [id], (err, results) => callback(err, results[0]));
+    db.query('SELECT * FROM LocalTravel WHERE id = ?', [id], (err, results) => {
+      if (err) return callback(err);
+      const row = results[0];
+      if (!row) return callback(null, null);
+      const enriched = { ...row, ...parseFeatures(row.features) };
+      callback(null, enriched);
+    });
   },
   getAvailability: (localTravelId, date, callback) => {
     db.query('SELECT * FROM LocalTravelAvailability WHERE local_travel_id = ? AND date = ?', [localTravelId, date], (err, results) => callback(err, results[0]));

@@ -26,8 +26,6 @@ const typeDefs = gql`
     has_parking: Boolean # Added parking
     is_pet_friendly: Boolean # Added pet friendly status
     rooms: [RoomType] # Detailed room types if available from this query
-    # pricing: [Pricing] # Pricing might be too complex for a list view, often fetched separately
-    # For simplicity in filterHotels, we might only return basic price range or average price
     min_price_per_night: Float
     max_price_per_night: Float
   }
@@ -44,18 +42,7 @@ const typeDefs = gql`
     price_per_night: Float # Average or base price
     amenities: [String]
     images: [String]
-    # available: Int # Availability is dynamic, usually fetched separately
   }
-
-  # Pricing is often complex and date-dependent, usually a separate query or part of booking process
-  # type Pricing {
-  #   room_type_id: ID!
-  #   date: String!
-  #   price: Float!
-  #   currency: String!
-  #   availability: Int
-  # }
-
   input HotelFiltersInput {
     name: String # New: for searching by hotel name
     city: String
@@ -71,7 +58,6 @@ const typeDefs = gql`
     has_parking: Boolean
     is_pet_friendly: Boolean
     amenities_include: [String] # Filter by hotels that have ALL specified amenities
-    # room_size_min: Int # This might be too specific for general hotel filter, consider room type filters
   }
 
   enum SortOrder {
@@ -106,8 +92,7 @@ const typeDefs = gql`
   type Query {
     hotels(limit: Int, page: Int): HotelsPage # Updated to return HotelsPage
     hotel(id: ID!): Hotel # Returns detailed info for one hotel
-    searchHotels(city: String, province: String, name: String): [Hotel] # Simple search, might be deprecated by filterHotels
-    
+
     filterHotels(
       filters: HotelFiltersInput
       sort: HotelSortInput
@@ -135,8 +120,6 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    # Example mutations, actual mutations depend on service capabilities
-    # createHotelBooking(userId: ID!, hotelId: ID!, roomTypeId: ID!, checkInDate: String!, checkOutDate: String!, numberOfGuests: Int!): Booking
     decreaseRoomAvailability(hotelId: ID!, roomTypeId: ID!, date: String!, quantity: Int!): AvailabilityResponse
     increaseRoomAvailability(hotelId: ID!, roomTypeId: ID!, date: String!, quantity: Int!): AvailabilityResponse
   }
@@ -310,86 +293,15 @@ const resolvers = {
         max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
       };
     },
-    // Explicit resolver for /search endpoint
-    async searchHotels(_, { city, province, name }) {
-      const queryParams = new URLSearchParams();
-      if (city) queryParams.append('city', city);
-      if (province) queryParams.append('province', province);
-      if (name) queryParams.append('name', name); // Add name to query if provided
-
-      const url = `${HOTEL_SERVICE_URL}/search?${queryParams.toString()}`;
-      console.log(`Fetching searched hotels from: ${url}`);
-
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Hotel service request failed (searchHotels) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch searched hotels from service. Status: ${res.status}`);
-        }
-        const serviceResponse = await res.json();
-
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          console.warn('Hotel service (searchHotels) did not return success or data:', serviceResponse);
-          return []; // Return empty array if no data or error
-        }
-
-        // Assuming serviceResponse.data is an array of hotels
-        const hotelData = Array.isArray(serviceResponse.data) ? serviceResponse.data : [];
-        return hotelData.map(hotel => ({
-          id: hotel.id,
-          name: hotel.name,
-          city: hotel.city || hotel.location || null,
-          province: hotel.province || null,
-          country: hotel.country || null,
-          address: hotel.address || null,
-          postal_code: hotel.postal_code || null,
-          star_rating: hotel.star_rating !== undefined ? parseFloat(hotel.star_rating) : null,
-          property_type: hotel.property_type || null,
-          description: hotel.description || null,
-          phone_number: hotel.phone_number || null,
-          email: hotel.email || null,
-          website: hotel.website || null,
-          amenities: hotel.amenities || [],
-          images: hotel.images || [],
-          check_in_time: hotel.check_in_time || null,
-          check_out_time: hotel.check_out_time || null,
-          has_wifi: typeof hotel.has_wifi === 'boolean' ? hotel.has_wifi : null,
-          has_breakfast: typeof hotel.has_breakfast === 'boolean' ? hotel.has_breakfast : null,
-          has_parking: typeof hotel.has_parking === 'boolean' ? hotel.has_parking : null,
-          is_pet_friendly: typeof hotel.is_pet_friendly === 'boolean' ? hotel.is_pet_friendly : null,
-          rooms: hotel.rooms ? hotel.rooms.map(room => ({
-            id: room.id,
-            hotel_id: hotel.id,
-            name: room.name || room.room_type_name || null,
-            description: room.description || null,
-            type_code: room.type_code || room.room_type_code || null,
-            bed_type: room.bed_type || null,
-            size_sqm: room.size_sqm !== undefined ? parseFloat(room.size_sqm) : null,
-            max_occupancy: room.max_occupancy !== undefined ? parseInt(room.max_occupancy, 10) : null,
-            price_per_night: room.price_per_night !== undefined ? parseFloat(room.price_per_night) : null,
-            amenities: room.amenities || [],
-            images: room.images || [],
-          })) : [],
-          min_price_per_night: hotel.min_price !== undefined ? parseFloat(hotel.min_price) : (hotel.min_price_per_night !== undefined ? parseFloat(hotel.min_price_per_night) : null),
-          max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
-        }));
-      } catch (error) {
-        console.error('Error in searchHotels resolver:', error);
-        throw new Error('An error occurred while searching hotels.');
-      }
-    },
     async filterHotels(_, { filters, sort, pagination }) {
       const HOTEL_FILTER_URL = `${HOTEL_SERVICE_URL}/filter`;
       const queryParams = new URLSearchParams();
 
       if (filters) {
-        // Map GraphQL filter names to potential service query param names if different
-        // For now, assume they are the same or service handles variations
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== null && value !== undefined) {
             if (Array.isArray(value)) {
-              value.forEach(v => queryParams.append(key, v)); // For array inputs like amenities_include
+              value.forEach(v => queryParams.append(key, v));
             } else if (String(value).trim() !== '') {
               queryParams.append(key, value);
             }
@@ -497,10 +409,6 @@ const resolvers = {
       return data.data;
     },
     async hotelAvailability(_, { hotelId, checkInDate, checkOutDate }) {
-      // This resolver needs to be adapted based on how the service provides availability for a date range and multiple room types.
-      // The current service endpoint /:id/availability?check_in=... seems to be for one day and might not directly map.
-      // For now, let's assume a conceptual endpoint or adapt if the service has a better one.
-      // This is a placeholder and likely needs significant adjustment based on actual service capabilities for date ranges.
       const queryParams = new URLSearchParams();
       if (checkInDate) queryParams.append('check_in_date', checkInDate);
       if (checkOutDate) queryParams.append('check_out_date', checkOutDate); // Assuming service supports date range
@@ -520,7 +428,6 @@ const resolvers = {
           console.warn('Hotel service (hotelAvailability) did not return success or data:', serviceResponse);
           return [];
         }
-        // Assuming serviceResponse.data is an array of objects matching RoomAvailability type
         return serviceResponse.data.map(avail => ({
           roomTypeId: avail.room_type_id,
           roomTypeName: avail.room_type_name,
@@ -534,9 +441,7 @@ const resolvers = {
         throw new Error('An error occurred while fetching hotel availability.');
       }
     },
-    // Explicit resolver for /:id/pricing endpoint
     async hotelPricing(_, { id, check_in, check_out }) {
-      // TODO: Confirm required params with hotel service (check_in/check_out)
       const queryParams = new URLSearchParams();
       if (check_in) queryParams.append('check_in', check_in);
       if (check_out) queryParams.append('check_out', check_out);
@@ -550,10 +455,8 @@ const resolvers = {
         }
         const serviceResponse = await res.json();
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          // TODO: Improve error reporting for missing/invalid pricing data
           return [];
         }
-        // Map pricing data to GraphQL Pricing type
         return Array.isArray(serviceResponse.data)
           ? serviceResponse.data.map(price => ({
               roomTypeId: price.room_type_id || price.roomTypeId || null,
@@ -563,7 +466,6 @@ const resolvers = {
             }))
           : [];
       } catch (error) {
-        // TODO: Add monitoring/logging for pricing errors
         throw new Error('An error occurred while fetching hotel pricing: ' + error.message);
       }
     }

@@ -2,6 +2,33 @@ const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../../../utils/pagination');
 
 const Flight = {
+  // Create a new Flight entry
+  create: (data, callback) => {
+    const {
+      airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description
+    } = data;
+    const sql = `INSERT INTO Flights (airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+    const values = [airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description];
+    db.query(sql, values, callback);
+  },
+  // Update an existing Flight entry
+  update: (id, data, callback) => {
+    const fields = [];
+    const values = [];
+    [
+      'airline', 'flight_number', 'origin_city', 'destination_city', 'departure_time', 'arrival_time', 'aircraft_model', 'seat_capacity', 'description'
+    ].forEach(field => {
+      if (data[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(data[field]);
+      }
+    });
+    if (fields.length === 0) return callback(null, { affectedRows: 0 });
+    const sql = `UPDATE Flights SET ${fields.join(', ')} WHERE id = ?`;
+    values.push(id);
+    db.query(sql, values, callback);
+  },
+
   // Decrease available seats for a flight and date
   decreaseAvailability: (flightId, date, quantity, callback) => {
     db.query(
@@ -151,8 +178,14 @@ const Flight = {
   getAvailability: (flightId, date, callback) => {
     db.query('SELECT * FROM FlightAvailability WHERE flight_id = ? AND travel_date = ?', [flightId, date], (err, results) => callback(err, results[0]));
   },
-  getPricing: (flightId, date, callback) => {
-    db.query('SELECT * FROM FlightPricing WHERE flight_id = ? AND travel_date = ?', [flightId, date], (err, results) => callback(err, results[0]));
+  getPricing: (flightId, date, seatClass, callback) => {
+    let sql = 'SELECT * FROM FlightPricing WHERE flight_id = ? AND travel_date = ?';
+    const params = [flightId, date];
+    if (seatClass) {
+      sql += ' AND (seat_class = ? OR class_type = ? OR flight_class = ?)';
+      params.push(seatClass, seatClass, seatClass);
+    }
+    db.query(sql, params, (err, results) => callback(err, results));
   }
 };
 

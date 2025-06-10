@@ -2,6 +2,33 @@ const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
 const Hotel = {
+  // Create a new Hotel entry
+  create: (data, callback) => {
+    const {
+      name, city, province, address, description, stars, phone, email
+    } = data;
+    const sql = `INSERT INTO Hotels (name, city, province, address, description, stars, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const values = [name, city, province, address, description, stars, phone, email];
+    db.query(sql, values, callback);
+  },
+  // Update an existing Hotel entry
+  update: (id, data, callback) => {
+    const fields = [];
+    const values = [];
+    [
+      'name', 'city', 'province', 'address', 'description', 'stars', 'phone', 'email'
+    ].forEach(field => {
+      if (data[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        values.push(data[field]);
+      }
+    });
+    if (fields.length === 0) return callback(null, { affectedRows: 0 });
+    const sql = `UPDATE Hotels SET ${fields.join(', ')} WHERE id = ?`;
+    values.push(id);
+    db.query(sql, values, callback);
+  },
+
   // Decrease available rooms for a room type and date
   decreaseAvailability: (roomTypeId, date, quantity, callback) => {
     db.query(

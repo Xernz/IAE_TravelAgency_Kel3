@@ -276,8 +276,14 @@ const Train = {
   getAvailability: (trainId, date, callback) => {
     db.query('SELECT * FROM TrainAvailability WHERE train_id = ? AND date = ?', [trainId, date], (err, results) => callback(err, results[0]));
   },
-  getPricing: (trainId, date, callback) => {
-    db.query('SELECT * FROM TrainPricing WHERE train_id = ? AND date = ?', [trainId, date], (err, results) => callback(err, results[0]));
+  getPricing: (trainId, date, seatClass, callback) => {
+    let sql = 'SELECT * FROM TrainPricing WHERE train_id = ? AND date = ?';
+    const params = [trainId, date];
+    if (seatClass) {
+      sql += ' AND (seat_class = ? OR class_type = ? OR train_class = ?)';
+      params.push(seatClass, seatClass, seatClass);
+    }
+    db.query(sql, params, (err, results) => callback(err, results));
   }
 };
 

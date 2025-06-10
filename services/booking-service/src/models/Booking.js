@@ -2,14 +2,33 @@ const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
 const Booking = {
+  // Updated to select all relevant fields for GQL alignment
   getById: (id, callback) => {
-    db.query('SELECT * FROM Bookings WHERE id = ?', [id], (err, results) => callback(err, results[0]));
+    db.query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE id = ?', [id], (err, results) => callback(err, results[0]));
   },
+  // Updated to select all relevant fields for GQL alignment
   getUserBookings: (userId, callback) => {
-    db.query('SELECT * FROM Bookings WHERE user_id = ?', [userId], (err, results) => callback(err, results));
+    db.query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE user_id = ?', [userId], (err, results) => callback(err, results));
   },
-  create: (userId, callback) => {
-    db.query('INSERT INTO Bookings (user_id) VALUES (?)', [userId], (err, results) => callback(err, results));
+  // Expanded to support all fields; expects an object with all fields
+  create: (bookingData, callback) => {
+    // bookingData should be: { user_id, booking_code, total_amount, currency, payment_status, special_requests, status }
+    // updated_at is handled by DB trigger or set to NOW() if needed
+    const {
+      user_id,
+      booking_code = null,
+      total_amount = null,
+      currency = null,
+      payment_status = null,
+      special_requests = null,
+      status = 'active'
+    } = bookingData;
+    db.query(
+      `INSERT INTO Bookings (user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+      [user_id, booking_code, total_amount, currency, payment_status, special_requests, status],
+      (err, results) => callback(err, results)
+    );
   },
   
   listAll: (params, callback) => {

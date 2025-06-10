@@ -6,22 +6,28 @@ const typeDefs = gql`
   type Train {
     id: ID!
     train_number: String
-    origin_station_name: String # Matching frontend expectation
-    destination_station_name: String # Matching frontend expectation
+    name: String
+    operator: String
+    origin_station_code: String
+    origin_station_name: String
     origin_city: String
-    destination_city: String
     origin_province: String
+    destination_station_code: String
+    destination_station_name: String
+    destination_city: String
     destination_province: String
     departure_time: String
     arrival_time: String
-    price: Float
-    seats_available: Int
+    duration: Int
     train_class: String
     subclass: String
     train_type: String
-    operator: String
-    duration: Int # Assuming duration is in minutes or a common unit
-    # Add other fields as needed by UI and provided by service
+    description: String
+    facilities: String
+    price: Float
+    seats_available: Int
+    created_at: String
+    updated_at: String
   }
 
   input TrainFiltersInput {
@@ -67,6 +73,11 @@ const typeDefs = gql`
     hasPrevPage: Boolean
   }
 
+  type AvailabilityResponse {
+    status: String!
+    message: String    affectedRows: Int
+  }
+
   type TrainsPage {
     trains: [Train!]!
     pagination: PaginationInfo
@@ -74,14 +85,11 @@ const typeDefs = gql`
 
   type Query {
     # Existing queries
-    trains(origin: String, destination: String, date: String): [Train]
+    trains(pagination: PaginationInput): [Train]
     train(id: ID!): Train
 
-    # Search trains query
-    searchTrains(origin: String, destination: String, date: String): [Train]
-
     # Pricing query for a specific train
-    trainPricing(id: ID!, date: String): Pricing
+    trainPricing(id: ID!, date: String): [Pricing]
 
     # New filter query
     filterTrains(
@@ -92,6 +100,8 @@ const typeDefs = gql`
   }
 
   type Mutation {
+    decreaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
+    increaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
     createTrain(train_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Train
     # Add other mutations as needed
   }
@@ -108,51 +118,45 @@ const TRAIN_SERVICE_URL = 'http://localhost:3007/api/trains'
 
 const resolvers = {
   Query: {
-    // Explicit resolver for /search endpoint
-    async searchTrains(_, { origin, destination, date }) {
-      const queryParams = new URLSearchParams();
-      if (origin) queryParams.append('origin', origin);
-      if (destination) queryParams.append('destination', destination);
-      if (date) queryParams.append('date', date);
-      const url = `${TRAIN_SERVICE_URL}/search?${queryParams.toString()}`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Train service request failed (searchTrains) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch searched trains from service. Status: ${res.status}`);
-        }
-        const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          return [];
-        }
-        // Map train data to GraphQL Train type
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(train => ({
-              id: train.id,
-              train_number: train.train_number || train.train_no || null,
-              origin_station_name: train.origin_station_name || train.origin_station_code || train.origin || null,
-              destination_station_name: train.destination_station_name || train.destination_station_code || train.destination || null,
-              origin_city: train.origin_city || null,
-              destination_city: train.destination_city || null,
-              departure_time: train.departure_time || null,
-              arrival_time: train.arrival_time || null,
-              price: train.price !== undefined ? parseFloat(train.price) : null,
-              seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
-              train_class: train.train_class || null,
-              subclass: train.subclass || null,
-              train_type: train.train_type || null,
-              operator: train.operator || null,
-              duration: train.duration !== undefined ? parseInt(train.duration, 10) : null,
-            }))
-          : [];
-      } catch (error) {
-        // TODO: Add monitoring/logging for searchTrains errors
-        throw new Error('An error occurred while fetching searched trains: ' + error.message);
-      }
+    // Refactored trains resolver: supports only pagination
+    async trains(_, { pagination = {} }) {
+      const query = Object.entries(pagination)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      const url = `${TRAIN_SERVICE_URL}${query ? `?${query}` : ''}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status !== 'success') return [];
+       return (data.data || []).map(train => ({
+        id: train.id,
+        train_number: train.train_number || train.train_code || train.train_no || null,
+        name: train.name || null,
+        operator: train.operator || null,
+        origin_station_code: train.origin_station_code || null,
+        origin_station_name: train.origin_station_name || null,
+        origin_city: train.origin_city || null,
+        origin_province: train.origin_province || null,
+        destination_station_code: train.destination_station_code || null,
+        destination_station_name: train.destination_station_name || null,
+        destination_city: train.destination_city || null,
+        destination_province: train.destination_province || null,
+        departure_time: train.departure_time || null,
+        arrival_time: train.arrival_time || null,
+        duration: train.duration !== undefined ? parseInt(train.duration, 10) : (train.travel_duration !== undefined ? parseInt(train.travel_duration, 10) : null),
+        train_class: train.train_class || null,
+        subclass: train.subclass || null,
+        train_type: train.train_type || null,
+        description: train.description || null,
+        facilities: train.facilities || null,
+        price: train.price !== undefined ? parseFloat(train.price) : null,
+        seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
+        created_at: train.created_at || null,
+        updated_at: train.updated_at || null,
+      }));
     },
     // Explicit resolver for /:id/pricing endpoint
-    async trainPricing(_, { id, date }) {
+     async trainPricing(_, { id, date }) {
       const queryParams = new URLSearchParams();
       if (date) queryParams.append('date', date);
       const url = `${TRAIN_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
@@ -167,7 +171,7 @@ const resolvers = {
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
           return [];
         }
-        // Map pricing data to a suitable GraphQL type (adjust as needed)
+        // Always return an array of Pricing objects
         return Array.isArray(serviceResponse.data)
           ? serviceResponse.data.map(price => ({
               seatClass: price.seat_class || null,
@@ -175,32 +179,13 @@ const resolvers = {
               currency: price.currency || 'IDR',
               date: price.date || null,
             }))
-          : [];
+          : serviceResponse.data ? [serviceResponse.data] : [];
       } catch (error) {
         // TODO: Add monitoring/logging for trainPricing errors
         throw new Error('An error occurred while fetching train pricing: ' + error.message);
       }
     },
-    async trains(_, args) {
-      let url = `${TRAIN_SERVICE_URL}?`;
-      Object.entries(args).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) url += `${key}=${encodeURIComponent(value)}&`;
-      });
-      const res = await fetch(url);
-      const data = await res.json();
-      const trainsData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.trains) ? data.data.trains : []);
-      if (data.status !== 'success') return [];
-      return trainsData.map(train => ({
-        id: train.id,
-        train_number: train.train_number || train.train_no || null,
-        origin: train.origin || train.origin_city || null,
-        destination: train.destination || train.destination_city || null,
-        departure_time: train.departure_time || null,
-        arrival_time: train.arrival_time || null,
-        price: train.price || null,
-        seats_available: train.seats_available || null,
-      }));
-    },
+
     async train(_, { id }) {
       const res = await fetch(`${TRAIN_SERVICE_URL}/${id}`);
       const data = await res.json();
@@ -208,22 +193,29 @@ const resolvers = {
       const train = data.data;
       return {
         id: train.id,
-        train_number: train.train_number || train.train_no || null,
-        origin_station_name: train.origin_station_name || train.origin_station_code || train.origin || null,
-        destination_station_name: train.destination_station_name || train.destination_station_code || train.destination || null,
+        train_number: train.train_number || train.train_code || train.train_no || null,
+        name: train.name || null,
+        operator: train.operator || null,
+        origin_station_code: train.origin_station_code || null,
+        origin_station_name: train.origin_station_name || null,
         origin_city: train.origin_city || null,
-        destination_city: train.destination_city || null,
         origin_province: train.origin_province || null,
+        destination_station_code: train.destination_station_code || null,
+        destination_station_name: train.destination_station_name || null,
+        destination_city: train.destination_city || null,
         destination_province: train.destination_province || null,
         departure_time: train.departure_time || null,
         arrival_time: train.arrival_time || null,
-        price: train.price !== undefined ? parseFloat(train.price) : null,
-        seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
+        duration: train.duration !== undefined ? parseInt(train.duration, 10) : (train.travel_duration !== undefined ? parseInt(train.travel_duration, 10) : null),
         train_class: train.train_class || null,
         subclass: train.subclass || null,
         train_type: train.train_type || null,
-        operator: train.operator || null,
-        duration: train.duration !== undefined ? parseInt(train.duration, 10) : null,
+        description: train.description || null,
+        facilities: train.facilities || null,
+        price: train.price !== undefined ? parseFloat(train.price) : null,
+        seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
+        created_at: train.created_at || null,
+        updated_at: train.updated_at || null,
       };
     },
     async filterTrains(_, { filters, sort, pagination }) {
@@ -309,19 +301,73 @@ const resolvers = {
     },
   },
   Mutation: {
-    async createTrain(_, { train_number, origin, destination, departure_time, arrival_time, price, seats_available }) {
-      if (!train_number || !origin || !destination || !departure_time || !arrival_time || !price || !seats_available) {
-        throw new Error('All fields are required');
+    async decreaseTrainAvailability(_, { trainId, date, quantity, seatClass }) {
+      if (!trainId || !date || !quantity) {
+        throw new Error('trainId, date, and quantity are required');
+      }
+      try {
+        const url = `${TRAIN_SERVICE_URL}/${trainId}/availability/decrease`;
+        const body = { date, quantity };
+        if (seatClass) body.seat_class = seatClass;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to decrease train availability');
+        return data;
+      } catch (err) {
+        throw new Error('Decrease train availability failed: ' + err.message);
+      }
+    },
+    async increaseTrainAvailability(_, { trainId, date, quantity, seatClass }) {
+      if (!trainId || !date || !quantity) {
+        throw new Error('trainId, date, and quantity are required');
+      }
+      try {
+        const url = `${TRAIN_SERVICE_URL}/${trainId}/availability/increase`;
+        const body = { date, quantity };
+        if (seatClass) body.seat_class = seatClass;
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.status !== 'success') throw new Error(data.message || 'Failed to increase train availability');
+        return data;
+      } catch (err) {
+        throw new Error('Increase train availability failed: ' + err.message);
+      }
+    },
+    async createTrain(_, args) {
+      // Map GraphQL args to Train microservice fields
+      const payload = {
+        train_number: args.train_number,
+        origin_station_name: args.origin, // assuming 'origin' maps to 'origin_station_name'
+        destination_station_name: args.destination, // assuming 'destination' maps to 'destination_station_name'
+        departure_time: args.departure_time,
+        arrival_time: args.arrival_time,
+        price: args.price,
+        seats_available: args.seats_available
+        // Add more fields if your Train model expects them
+      };
+      // Validate required fields
+      for (const key of Object.keys(payload)) {
+        if (payload[key] === undefined || payload[key] === null) {
+          throw new Error(`Field '${key}' is required`);
+        }
       }
       try {
         const res = await fetch(TRAIN_SERVICE_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ train_number, origin, destination, departure_time, arrival_time, price, seats_available })
+          body: JSON.stringify(payload)
         });
         const data = await res.json();
         if (data.status !== 'success') throw new Error(data.message || 'Failed to create train');
-        return data.data;
+        return { id: data.data.id, ...payload };
       } catch (err) {
         throw new Error('Train creation failed: ' + err.message);
       }

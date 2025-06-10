@@ -9,12 +9,12 @@ const typeDefs = gql`
     email: String
     phone: String
     created_at: String
-    updated_at: String
   }
   type AuthPayload {
     status: String!
     message: String
     user: User
+    token: String!
   }
   input RegisterInput {
     email: String!
@@ -33,9 +33,43 @@ const typeDefs = gql`
   type Query {
     users: [User]
     user(id: ID!): User
+    # Integration/partner use only: filter users for account integration (not public listing)
+    filterUsers(filters: UserFilterInput, pagination: PaginationInput, sort: UserSortInput): FilteredUsersPage
+  }
+
+  input UserFilterInput {
+    email: String
+    full_name: String
+    phone_number: String
+    min_age: Int
+    max_age: Int
+    start_date: String
+    end_date: String
+    kabupaten_kota: String
+    province: String
+    postal_code: String
+  }
+  input UserSortInput {
+    sort_by: String
+    sort_order: String
+  }
+  input PaginationInput {
+    page: Int
+    limit: Int
+  }
+  type FilteredUsersPage {
+    users: [User]
+    pagination: PaginationInfo
+  }
+  type PaginationInfo {
+    totalItems: Int
+    totalPages: Int
+    currentPage: Int
+    pageSize: Int
+    hasNextPage: Boolean
+    hasPrevPage: Boolean
   }
   type Mutation {
-    createUser(name: String!, email: String!, phone: String): User
     updateUser(id: ID!, name: String, email: String, phone: String): User
     deleteUser(id: ID!): Boolean
     login(email: String!, password: String!): AuthPayload
@@ -57,7 +91,7 @@ const resolvers = {
         email: user.email || null,
         phone: user.phone || user.phone_number || null,
         created_at: user.created_at || null,
-        updated_at: user.updated_at || null,
+        
       }));
     },
     async user(_, { id }) {
@@ -71,10 +105,37 @@ const resolvers = {
         email: user.email || null,
         phone: user.phone || user.phone_number || null,
         created_at: user.created_at || null,
-        updated_at: user.updated_at || null,
+        
+      };
+    },
+    /**
+     * Integration/partner use only: filter users for account integration (not public listing)
+     */
+    async filterUsers(_, { filters = {}, pagination = {}, sort = {} }) {
+      // Compose query params
+      const params = { ...filters, ...pagination, ...sort };
+      const query = Object.entries(params)
+        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
+        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join('&');
+      const url = `${USERS_SERVICE_URL}/filter${query ? `?${query}` : ''}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.status !== 'success') return { users: [], pagination: {} };
+      return {
+        users: (data.data || []).map(user => ({
+          id: user.id,
+          name: user.name || user.full_name || null,
+          email: user.email || null,
+          phone: user.phone || user.phone_number || null,
+          created_at: user.created_at || null,
+          
+        })),
+        pagination: data.pagination || {}
       };
     }
   },
+
   Mutation: {
     async login(_, { email, password }) {
       if (!email || !password) throw new Error('Email and password are required');
@@ -116,23 +177,6 @@ const resolvers = {
         };
       } catch (err) {
         throw new Error('Registration failed: ' + err.message);
-      }
-    },
-    async createUser(_, { name, email, phone }) {
-      if (!name || !email) {
-        throw new Error('Name and email are required');
-      }
-      try {
-        const res = await fetch(USERS_SERVICE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, email, phone })
-        });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to create user');
-        return data.data;
-      } catch (err) {
-        throw new Error('User creation failed: ' + err.message);
       }
     },
     async updateUser(_, { id, name, email, phone }) {
