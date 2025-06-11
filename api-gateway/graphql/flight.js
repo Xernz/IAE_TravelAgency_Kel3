@@ -1,6 +1,6 @@
 // GraphQL schema and resolvers for Flight Service
 const { gql } = require('apollo-server-express');
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 const typeDefs = gql`
   type Flight {
@@ -11,9 +11,14 @@ const typeDefs = gql`
     destination: String
     departure_time: String
     arrival_time: String
-    price: Float
-    seats_available: Int
-    # Add other fields like flight_class if UI needs them and service provides them
+
+    # Additional static fields
+    origin_airport_iata: String
+    destination_airport_iata: String
+    airline_code: String
+
+    # price and seats_available moved to dailyStatus
+    dailyStatus(date: String!): FlightDailyStatus
   }
 
   input FlightFiltersInput {
@@ -55,7 +60,8 @@ const typeDefs = gql`
 
   type AvailabilityResponse {
     status: String!
-    message: String    affectedRows: Int
+    message: String
+    affectedRows: Int
   }
 
   type FlightsPage {
@@ -68,8 +74,8 @@ const typeDefs = gql`
     flights(pagination: PaginationInput): [Flight]
     flight(id: ID!): Flight
 
-    # Pricing query for a specific flight
-    flightPricing(id: ID!, date: String): [Pricing]
+    # Daily status query for a specific flight (availability & pricing)
+    flightDailyStatus(flightId: ID!, date: String!): FlightDailyStatus
 
     # New filter query
     filterFlights(
@@ -80,276 +86,171 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    decreaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
-    increaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
+    decreaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!): AvailabilityResponse
+    increaseFlightAvailability(flightId: ID!, date: String!, quantity: Int!): AvailabilityResponse
     createFlight(airline: String!, flight_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Flight
     # Add other mutations as needed
   }
 
-  type Pricing {
-    seatClass: String
+  type FlightDailyStatus {
+    flightId: ID!
+    date: String!
+    availableSeats: Int
     price: Float
     currency: String
-    date: String
   }
 `;
 
-const FLIGHT_SERVICE_URL = 'http://localhost:3002/api/flights';
+const FLIGHT_SERVICE_URL = 'http://localhost:3002/api';
+
+const mapFlight = (flight) => ({
+  id: flight.id,
+  airline: flight.airline_name,
+  flight_number: flight.flight_number,
+  origin: flight.origin_name,
+  destination: flight.destination_name,
+  departure_time: flight.departure_time,
+  arrival_time: flight.arrival_time,
+  origin_airport_iata: flight.origin_code,
+  destination_airport_iata: flight.destination_code,
+  airline_code: flight.airline_code,
+});
 
 const resolvers = {
+  Flight: {
+    dailyStatus: async (parent, { date }) => {
+      if (!parent.id || !date) return null;
+      try {
+        const response = await axios.get(`${FLIGHT_SERVICE_URL}/flights/${parent.id}/daily-status`, { params: { date } });
+        const { data } = response.data;
+        if (response.data.status === 'success' && data) {
+          const status = Array.isArray(data) ? data[0] : data;
+          return status ? {
+            flightId: status.flight_id,
+            date: status.date,
+            availableSeats: status.available_seats,
+            price: status.price,
+            currency: status.currency,
+          } : null;
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error fetching daily status for flight ${parent.id}:`, error.message);
+        return null;
+      }
+    },
+  },
   Query: {
-    // Refactored flights resolver: supports only pagination
-    async flights(_, { pagination = {} }) {
-      const query = Object.entries(pagination)
-        .filter(([_, v]) => v !== undefined && v !== null && v !== "")
-        .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-        .join('&');
-      const url = `${FLIGHT_SERVICE_URL}${query ? `?${query}` : ''}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status !== 'success') return [];
-      const flightsData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.flights) ? data.data.flights : []);
-      return flightsData.map(flight => ({
-        id: flight.id,
-        airline: flight.airline || null,
-        flight_number: flight.flight_number || flight.flight_no || null,
-        origin: flight.origin || flight.origin_city || null,
-        destination: flight.destination || flight.destination_city || null,
-        departure_time: flight.departure_time || null,
-        arrival_time: flight.arrival_time || null,
-        price: flight.price !== undefined ? parseFloat(flight.price) : null,
-        seats_available: flight.seats_available !== undefined ? parseInt(flight.seats_available, 10) : null,
-      }));
-    },
-    // Explicit resolver for /:id/pricing endpoint
-     async flightPricing(_, { id, date }) {
-      const queryParams = new URLSearchParams();
-      if (date) queryParams.append('date', date);
-      const url = `${FLIGHT_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
+    flights: async (_, { pagination = { page: 1, limit: 10 } }) => {
       try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Flight service request failed (flightPricing) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch flight pricing from service. Status: ${res.status}`);
+        const { page, limit } = pagination;
+        const { data } = await axios.get(`${FLIGHT_SERVICE_URL}/flights`, { params: { page, limit } });
+        if (data.status === 'success' && data.data) {
+          return data.data.map(mapFlight);
         }
-        const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          return [];
-        }
-        // Always return an array of Pricing objects
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(price => ({
-              seatClass: price.seat_class || null,
-              price: price.price,
-              currency: price.currency || 'IDR',
-              date: price.date || null,
-            }))
-          : serviceResponse.data ? [serviceResponse.data] : [];
+        return [];
       } catch (error) {
-        // TODO: Add monitoring/logging for flightPricing errors
-        throw new Error('An error occurred while fetching flight pricing: ' + error.message);
+        console.error('Error fetching flights:', error.message);
+        return [];
       }
     },
-    async flights(_, args) {
-      let url = FLIGHT_SERVICE_URL;
-      // If any filter params are provided, build a query string
-      const params = [];
-      if (args.origin) params.push(`origin=${encodeURIComponent(args.origin)}`);
-      if (args.destination) params.push(`destination=${encodeURIComponent(args.destination)}`);
-      if (args.date) params.push(`date=${encodeURIComponent(args.date)}`);
-      if (params.length > 0) {
-        // Use /filter endpoint if available, otherwise append as query params
-        url += '/filter?' + params.join('&');
-      }
-      const res = await fetch(url);
-      const data = await res.json();
-      // Check if the primary data field is an array, common for list endpoints
-      const flightsData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.flights) ? data.data.flights : []);
-      if (data.status !== 'success') return [];
-      return flightsData.map(flight => ({
-        id: flight.id,
-        airline: flight.airline || null,
-        flight_number: flight.flight_number || flight.flight_no || null,
-        origin: flight.origin || flight.origin_city || null,
-        destination: flight.destination || flight.destination_city || null,
-        departure_time: flight.departure_time || null,
-        arrival_time: flight.arrival_time || null,
-        price: flight.price || null,
-        seats_available: flight.seats_available || null,
-      }));
-    },
-    async flight(_, { id }) {
-      const res = await fetch(`${FLIGHT_SERVICE_URL}/${id}`);
-      const data = await res.json();
-      if (data.status !== 'success' || !data.data) return null;
-      const flight = data.data;
-      return {
-        id: flight.id,
-        airline: flight.airline_name || flight.airline_code || flight.airline || null,
-        flight_number: flight.flight_number || flight.flight_no || null,
-        origin: flight.origin_city || flight.origin_code || flight.origin || null,
-        destination: flight.destination_city || flight.destination_code || flight.destination || null,
-        departure_time: flight.departure_time || null,
-        arrival_time: flight.arrival_time || null,
-        price: flight.price || null,
-        seats_available: flight.seats_available || null,
-      };
-    },
-    async filterFlights(_, { filters, sort, pagination }) {
-      const FLIGHT_FILTER_URL = `${FLIGHT_SERVICE_URL}/filter`;
-      const queryParams = new URLSearchParams();
-
-      if (filters) {
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== null && value !== undefined && String(value).trim() !== '') {
-            // Map GraphQL filter names to service API query param names if they differ
-            // For now, assuming they are the same as defined in FlightFiltersInput
-            queryParams.append(key, value);
-          }
-        });
-      }
-
-      if (sort) {
-        if (sort.sortBy) queryParams.append('sort_by', sort.sortBy);
-        if (sort.sortOrder) queryParams.append('sort_order', sort.sortOrder);
-      }
-
-      if (pagination) {
-        if (pagination.page) queryParams.append('page', pagination.page);
-        if (pagination.limit) queryParams.append('limit', pagination.limit);
-      }
-
-      const url = `${FLIGHT_FILTER_URL}?${queryParams.toString()}`;
-      console.log(`Fetching flights from: ${url}`); // For debugging
-
+    flight: async (_, { id }) => {
       try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Flight service request failed with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch flights from service. Status: ${res.status}`);
+        const { data } = await axios.get(`${FLIGHT_SERVICE_URL}/flights/${id}`);
+        if (data.status === 'success' && data.data) {
+          return mapFlight(data.data);
         }
-        const serviceResponse = await res.json();
-
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          console.warn('Flight service did not return success or data:', serviceResponse);
-          return { flights: [], pagination: null };
-        }
-
-        const mappedFlights = serviceResponse.data.map(flight => ({
-          id: flight.id,
-          airline: flight.airline_name || flight.airline_code || flight.airline || null,
-          flight_number: flight.flight_number || flight.flight_no || null,
-          origin: flight.origin_city || flight.origin_code || flight.origin || null,
-          destination: flight.destination_city || flight.destination_code || flight.destination || null,
-          departure_time: flight.departure_time || null,
-          arrival_time: flight.arrival_time || null,
-          price: flight.price !== undefined ? parseFloat(flight.price) : null,
-          seats_available: flight.seats_available !== undefined && flight.seats_available !== null ? parseInt(flight.seats_available, 10) : null,
-        }));
-
-        const servicePagination = serviceResponse.pagination || {};
-        const currentPage = parseInt(servicePagination.current_page || servicePagination.page, 10) || 1;
-        const totalPages = parseInt(servicePagination.total_pages || servicePagination.pages, 10) || 0;
-        
-        const mappedPagination = {
-          totalItems: parseInt(servicePagination.total_items || servicePagination.total, 10) || 0,
-          totalPages: totalPages,
-          currentPage: currentPage,
-          pageSize: parseInt(servicePagination.per_page || servicePagination.limit, 10) || 0,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        };
-
-        return {
-          flights: mappedFlights,
-          pagination: mappedPagination,
-        };
+        return null;
       } catch (error) {
-        console.error('Error in filterFlights resolver:', error);
-        // Depending on policy, you might want to throw the error or return a structured error response
-        throw new Error('An error occurred while fetching flights.');
+        console.error(`Error fetching flight ${id}:`, error.message);
+        return null;
       }
     },
-    async flight(_, { id }) {
-      const res = await fetch(`${FLIGHT_SERVICE_URL}/${id}`);
-      const data = await res.json();
-      if (data.status !== 'success') return null;
-      const flight = data.data;
-      if (!flight) return null; // Ensure flight data exists before mapping
-      return {
-        id: flight.id,
-        airline: flight.airline || null,
-        flight_number: flight.flight_number || flight.flight_no || null,
-        origin: flight.origin || flight.origin_city || null,
-        destination: flight.destination || flight.destination_city || null,
-        departure_time: flight.departure_time || null,
-        arrival_time: flight.arrival_time || null,
-        price: flight.price || null,
-        seats_available: flight.seats_available || null,
-      };
-    }
+    flightDailyStatus: async (_, { flightId, date }) => {
+      if (!flightId || !date) return null;
+      try {
+        const response = await axios.get(`${FLIGHT_SERVICE_URL}/flights/${flightId}/daily-status`, { params: { date } });
+        const { data } = response.data; // Assuming service returns { status: 'success', data: { flight_id, ... } }
+        if (response.data.status === 'success' && data) {
+          const status = Array.isArray(data) ? data[0] : data; // Handle if service wraps in array
+          return status ? {
+            flightId: status.flight_id,
+            date: status.date,
+            availableSeats: status.available_seats,
+            price: status.price,
+            currency: status.currency,
+          } : null;
+        }
+        return null;
+      } catch (error) {
+        console.error(`Error fetching daily status for flight ${flightId} on date ${date}:`, error.message);
+        // Optionally, check error.response.status for 404 and return null, otherwise throw
+        if (error.response && error.response.status === 404) {
+            return null; // Data not found for this flight/date combination
+        }
+        // For other errors, you might want to throw or return a more specific GraphQL error
+        throw new Error(`Failed to fetch daily status for flight ${flightId}`);
+      }
+    },
+    filterFlights: async (_, { filters, sort, pagination = { page: 1, limit: 10 } }) => {
+      try {
+        const params = { ...filters, ...sort, ...pagination };
+        const { data } = await axios.get(`${FLIGHT_SERVICE_URL}/flights/filter`, { params });
+        if (data.status === 'success' && data.data) {
+          const servicePagination = data.pagination;
+          const gqlPagination = servicePagination ? {
+            totalItems: servicePagination.total_items,
+            totalPages: servicePagination.total_pages,
+            currentPage: servicePagination.current_page,
+            pageSize: servicePagination.items_per_page,
+            hasNextPage: servicePagination.has_next_page,
+            hasPrevPage: servicePagination.has_prev_page,
+          } : null;
+
+          return {
+            flights: data.data.map(mapFlight),
+            pagination: gqlPagination,
+          };
+        }
+        return { flights: [], pagination: null };
+      } catch (error) {
+        console.error('Error filtering flights:', error.message);
+        return { flights: [], pagination: null };
+      }
+    },
   },
   Mutation: {
-    async decreaseFlightAvailability(_, { flightId, date, quantity, seatClass }) {
-      if (!flightId || !date || !quantity) {
-        throw new Error('flightId, date, and quantity are required');
-      }
+    decreaseFlightAvailability: async (_, { flightId, date, quantity }) => {
       try {
-        const url = `${FLIGHT_SERVICE_URL}/${flightId}/availability/decrease`;
-        const body = { date, quantity };
-        if (seatClass) body.seat_class = seatClass;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to decrease flight availability');
+        const { data } = await axios.post(`${FLIGHT_SERVICE_URL}/flights/${flightId}/availability/decrease`, { date, quantity });
         return data;
-      } catch (err) {
-        throw new Error('Decrease flight availability failed: ' + err.message);
+      } catch (error) {
+        console.error('Decrease flight availability failed:', error.message);
+        throw new Error(error.response?.data?.message || 'Failed to decrease flight availability');
       }
     },
-    async increaseFlightAvailability(_, { flightId, date, quantity, seatClass }) {
-      if (!flightId || !date || !quantity) {
-        throw new Error('flightId, date, and quantity are required');
-      }
+    increaseFlightAvailability: async (_, { flightId, date, quantity }) => {
       try {
-        const url = `${FLIGHT_SERVICE_URL}/${flightId}/availability/increase`;
-        const body = { date, quantity };
-        if (seatClass) body.seat_class = seatClass;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body)
-        });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to increase flight availability');
+        const { data } = await axios.post(`${FLIGHT_SERVICE_URL}/flights/${flightId}/availability/increase`, { date, quantity });
         return data;
-      } catch (err) {
-        throw new Error('Increase flight availability failed: ' + err.message);
+      } catch (error) {
+        console.error('Increase flight availability failed:', error.message);
+        throw new Error(error.response?.data?.message || 'Failed to increase flight availability');
       }
     },
-    async createFlight(_, { airline, flight_number, origin, destination, departure_time, arrival_time, price, seats_available }) {
-      if (!airline || !flight_number || !origin || !destination || !departure_time || !arrival_time || !price || !seats_available) {
-        throw new Error('All fields are required');
-      }
+    createFlight: async (_, args) => {
       try {
-        const res = await fetch(FLIGHT_SERVICE_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ airline, flight_number, origin, destination, departure_time, arrival_time, price, seats_available })
-        });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to create flight');
-        return data.data;
-      } catch (err) {
-        throw new Error('Flight creation failed: ' + err.message);
+        const { data } = await axios.post(`${FLIGHT_SERVICE_URL}/flights`, args);
+        if (data.status === 'success') {
+          return mapFlight(data.data);
+        }
+        return null;
+      } catch (error) {
+        console.error('Flight creation failed:', error.message);
+        throw new Error(error.response?.data?.message || 'Flight creation failed');
       }
-    }
-  }
+    },
+  },
 };
 
 module.exports = { typeDefs, resolvers };

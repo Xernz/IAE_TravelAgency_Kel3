@@ -5,29 +5,14 @@ const fetch = require('node-fetch');
 const typeDefs = gql`
   type Hotel {
     id: ID!
-    name: String!
+    name: String
     city: String
     province: String
-    country: String # Added country
     address: String
-    postal_code: String # Added postal_code
-    star_rating: Float # Changed to Float for ratings like 4.5
+    description: String
+    stars: Float
     property_type: String
-    description: String # Added description
-    phone_number: String # Added phone_number
-    email: String # Added email
-    website: String # Added website
-    amenities: [String] # Added list of amenities
-    images: [String] # Added list of image URLs
-    check_in_time: String
-    check_out_time: String
-    has_wifi: Boolean
-    has_breakfast: Boolean
-    has_parking: Boolean # Added parking
-    is_pet_friendly: Boolean # Added pet friendly status
-    rooms: [RoomType] # Detailed room types if available from this query
-    min_price_per_night: Float
-    max_price_per_night: Float
+    facilities: String
   }
 
   type RoomType {
@@ -43,21 +28,20 @@ const typeDefs = gql`
     amenities: [String]
     images: [String]
   }
+
   input HotelFiltersInput {
-    name: String # New: for searching by hotel name
+    name: String
     city: String
     province: String
-    country: String
+    stars: Int
     property_type: String
-    min_star_rating: Float
-    max_star_rating: Float
-    min_price: Float # Min price per night for a standard room
-    max_price: Float # Max price per night for a standard room
-    has_breakfast: Boolean
-    has_wifi: Boolean
-    has_parking: Boolean
-    is_pet_friendly: Boolean
-    amenities_include: [String] # Filter by hotels that have ALL specified amenities
+    facilities: String
+
+    # DailyStatus related filters
+    date: String
+    room_type_name: String
+    min_price: Float
+    max_price: Float
   }
 
   enum SortOrder {
@@ -66,7 +50,7 @@ const typeDefs = gql`
   }
 
   input HotelSortInput {
-    sortBy: String # e.g., "star_rating", "price", "name"
+    sortBy: String # e.g., "stars", "price", "name"
     sortOrder: SortOrder
   }
 
@@ -80,48 +64,37 @@ const typeDefs = gql`
     totalPages: Int
     currentPage: Int
     pageSize: Int
-    hasNextPage: Boolean
-    hasPrevPage: Boolean
   }
 
   type HotelsPage {
     hotels: [Hotel!]!
-    pagination: PaginationInfo
+    pagination: PaginationInfo!
   }
 
   type Query {
-    hotels(limit: Int, page: Int): HotelsPage # Updated to return HotelsPage
-    hotel(id: ID!): Hotel # Returns detailed info for one hotel
+    hotels(limit: Int, page: Int): HotelsPage
+    hotel(id: ID!): Hotel
 
     filterHotels(
       filters: HotelFiltersInput
       sort: HotelSortInput
       pagination: PaginationInput
-    ): HotelsPage # Updated to use inputs and return HotelsPage
+    ): HotelsPage
 
-    hotelAvailability(hotelId: ID!, checkInDate: String!, checkOutDate: String!): [RoomAvailability]
-    hotelPricing(id: ID!, check_in: String, check_out: String): [Pricing] # Pricing might be part of booking flow
+    hotelDailyStatus(hotelId: ID!, date: String!): [HotelRoomDailyStatus]
   }
 
-  type RoomAvailability {
-    roomTypeId: ID!
-    roomTypeName: String
+  type HotelRoomDailyStatus {
+    roomTypeName: String!
     date: String!
-    availableCount: Int!
-    price: Float # Price for this room type on this date
-    currency: String
-  }
-
-  type Pricing {
-    roomTypeId: ID
+    availableRooms: Int
     price: Float
     currency: String
-    date: String
   }
 
   type Mutation {
-    decreaseRoomAvailability(hotelId: ID!, roomTypeId: ID!, date: String!, quantity: Int!): AvailabilityResponse
-    increaseRoomAvailability(hotelId: ID!, roomTypeId: ID!, date: String!, quantity: Int!): AvailabilityResponse
+    decreaseRoomAvailability(hotelId: ID!, roomTypeName: String!, date: String!, quantity: Int!): AvailabilityResponse
+    increaseRoomAvailability(hotelId: ID!, roomTypeName: String!, date: String!, quantity: Int!): AvailabilityResponse
   }
 
   type AvailabilityResponse {
@@ -132,6 +105,19 @@ const typeDefs = gql`
 `;
 
 const HOTEL_SERVICE_URL = 'http://localhost:3003/api/hotels';
+
+// Helper function to map service data to the GraphQL Hotel type
+const mapHotel = (hotel) => ({
+  id: hotel.id,
+  name: hotel.name,
+  city: hotel.city,
+  province: hotel.province,
+  address: hotel.address,
+  description: hotel.description,
+  stars: hotel.star_rating, // Corrected mapping from the service's 'star_rating'
+  property_type: hotel.property_type,
+  facilities: hotel.facilities,
+});
 
 const resolvers = {
   Query: {
@@ -145,166 +131,59 @@ const resolvers = {
 
       try {
         const res = await fetch(url);
-        console.log('Hotel resolver fetch status:', res.status);
         if (!res.ok) {
           const errorBody = await res.text();
-          console.error(`Hotel service request failed (hotels) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch hotels from service. Status: ${res.status}`);
+          throw new Error(`Hotel service request failed (hotels) with status ${res.status}: ${errorBody}`);
         }
         const serviceResponse = await res.json();
-        console.log('Hotel resolver serviceResponse:', JSON.stringify(serviceResponse, null, 2));
 
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          console.warn('Hotel service (hotels) did not return success or data:', serviceResponse);
-          return { hotels: [], pagination: null };
+          return { hotels: [], pagination: { totalItems: 0, totalPages: 0, currentPage: 1, pageSize: 10 } };
         }
-
-        const mappedHotels = serviceResponse.data.map(hotel => ({
-          id: hotel.id,
-          name: hotel.name,
-          city: hotel.city || hotel.location || null,
-          province: hotel.province || null,
-          country: hotel.country || null,
-          address: hotel.address || null,
-          postal_code: hotel.postal_code || null,
-          star_rating: hotel.star_rating !== undefined ? parseFloat(hotel.star_rating) : null,
-          property_type: hotel.property_type || null,
-          description: hotel.description || null,
-          phone_number: hotel.phone_number || null,
-          email: hotel.email || null,
-          website: hotel.website || null,
-          amenities: hotel.amenities || [],
-          images: hotel.images || [],
-          check_in_time: hotel.check_in_time || null,
-          check_out_time: hotel.check_out_time || null,
-          has_wifi: hotel.has_wifi,
-          has_breakfast: hotel.has_breakfast,
-          has_parking: hotel.has_parking,
-          is_pet_friendly: hotel.is_pet_friendly,
-          rooms: hotel.rooms ? hotel.rooms.map(room => ({
-            id: room.id,
-            hotel_id: hotel.id, // Assign parent hotel ID
-            name: room.name || room.room_type_name || null,
-            description: room.description || null,
-            type_code: room.type_code || room.room_type_code || null,
-            bed_type: room.bed_type || null,
-            size_sqm: room.size_sqm !== undefined ? parseFloat(room.size_sqm) : null,
-            max_occupancy: room.max_occupancy !== undefined ? parseInt(room.max_occupancy, 10) : null,
-            price_per_night: room.price_per_night !== undefined ? parseFloat(room.price_per_night) : null,
-            amenities: room.amenities || [],
-            images: room.images || [],
-          })) : [],
-          min_price_per_night: hotel.min_price !== undefined ? parseFloat(hotel.min_price) : (hotel.min_price_per_night !== undefined ? parseFloat(hotel.min_price_per_night) : null),
-          max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
-        }));
-
-        const servicePagination = serviceResponse.pagination || {};
-        const currentPage = parseInt(servicePagination.current_page || servicePagination.page, 10) || 1;
-        const totalPages = parseInt(servicePagination.total_pages || servicePagination.pages, 10) || 0;
-
-        const mappedPagination = {
-          totalItems: parseInt(servicePagination.total_items || servicePagination.total, 10) || 0,
-          totalPages: totalPages,
-          currentPage: currentPage,
-          pageSize: parseInt(servicePagination.per_page || servicePagination.limit, 10) || 0,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        };
 
         return {
-          hotels: mappedHotels,
-          pagination: mappedPagination,
+          hotels: serviceResponse.data.map(mapHotel),
+          pagination: {
+            totalItems: serviceResponse.pagination.totalItems,
+            totalPages: serviceResponse.pagination.totalPages,
+            currentPage: serviceResponse.pagination.page,
+            pageSize: serviceResponse.pagination.limit,
+          },
         };
-
-      } catch (error) {
-        console.error('Error in hotels resolver:', error);
-        if (error.response) {
-          console.error('Error response:', error.response.status, error.response.statusText);
-        }
-        if (error.stack) {
-          console.error('Error stack:', error.stack);
-        }
-        throw new Error('An error occurred while fetching hotels.');
+      } catch (err) {
+        console.error('Error in hotels resolver:', err);
+        throw new Error('Could not fetch hotels.');
       }
     },
+
     async hotel(_, { id }) {
-      const url = `${HOTEL_SERVICE_URL}?${limit ? `limit=${limit}&` : ''}${page ? `page=${page}` : ''}`;
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status !== 'success') return [];
-      // Map REST fields to GraphQL fields
-      const hotelData = Array.isArray(data.data) ? data.data : (data.data && Array.isArray(data.data.hotels) ? data.data.hotels : []);
-      return hotelData.map(hotel => ({
-        id: hotel.id,
-        name: hotel.name,
-        city: hotel.location || null, // Map 'location' to 'city'
-        province: null, // Not provided by REST
-        address: null, // Not provided by REST
-        star_rating: null, // Not provided by REST
-        property_type: null, // Not provided by REST
-        has_wifi: null, // Not provided by REST
-        has_breakfast: null, // Not provided by REST
-        rooms: [], // Not provided by REST
-        pricing: [], // Not provided by REST
-      }));
+      const url = `${HOTEL_SERVICE_URL}/${id}`;
+      console.log(`Fetching hotel details from: ${url}`);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          if (res.status === 404) return null;
+          const errorBody = await res.text();
+          throw new Error(`Hotel service request failed with status ${res.status}: ${errorBody}`);
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return null;
+        }
+        return mapHotel(serviceResponse.data);
+      } catch (err) {
+        console.error('Error in hotel resolver:', err);
+        throw new Error('Could not fetch hotel details.');
+      }
     },
-    async hotel(_, { id }) {
-      const res = await fetch(`${HOTEL_SERVICE_URL}/${id}`);
-      const data = await res.json();
-      if (data.status !== 'success' || !data.data) return null;
-      const hotel = data.data;
-      // Apply detailed mapping similar to 'hotels' resolver for consistency
-      return {
-        id: hotel.id,
-        name: hotel.name,
-        city: hotel.city || hotel.location || null,
-        province: hotel.province || null,
-        country: hotel.country || null,
-        address: hotel.address || null,
-        postal_code: hotel.postal_code || null,
-        star_rating: hotel.star_rating !== undefined ? parseFloat(hotel.star_rating) : null,
-        property_type: hotel.property_type || null,
-        description: hotel.description || null,
-        phone_number: hotel.phone_number || null,
-        email: hotel.email || null,
-        website: hotel.website || null,
-        amenities: hotel.amenities || [],
-        images: hotel.images || [],
-        check_in_time: hotel.check_in_time || null,
-        check_out_time: hotel.check_out_time || null,
-        has_wifi: hotel.has_wifi,
-        has_breakfast: hotel.has_breakfast,
-        has_parking: hotel.has_parking,
-        is_pet_friendly: hotel.is_pet_friendly,
-        rooms: hotel.rooms ? hotel.rooms.map(room => ({
-          id: room.id,
-          hotel_id: hotel.id,
-          name: room.name || room.room_type_name || null,
-          description: room.description || null,
-          type_code: room.type_code || room.room_type_code || null,
-          bed_type: room.bed_type || null,
-          size_sqm: room.size_sqm !== undefined ? parseFloat(room.size_sqm) : null,
-          max_occupancy: room.max_occupancy !== undefined ? parseInt(room.max_occupancy, 10) : null,
-          price_per_night: room.price_per_night !== undefined ? parseFloat(room.price_per_night) : null,
-          amenities: room.amenities || [],
-          images: room.images || [],
-        })) : [],
-        min_price_per_night: hotel.min_price !== undefined ? parseFloat(hotel.min_price) : (hotel.min_price_per_night !== undefined ? parseFloat(hotel.min_price_per_night) : null),
-        max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
-      };
-    },
+
     async filterHotels(_, { filters, sort, pagination }) {
-      const HOTEL_FILTER_URL = `${HOTEL_SERVICE_URL}/filter`;
       const queryParams = new URLSearchParams();
 
       if (filters) {
         Object.entries(filters).forEach(([key, value]) => {
-          if (value !== null && value !== undefined) {
-            if (Array.isArray(value)) {
-              value.forEach(v => queryParams.append(key, v));
-            } else if (String(value).trim() !== '') {
-              queryParams.append(key, value);
-            }
+          if (value !== null && value !== undefined && value !== '') {
+            queryParams.append(key, value);
           }
         });
       }
@@ -318,193 +197,100 @@ const resolvers = {
         if (pagination.page) queryParams.append('page', pagination.page);
         if (pagination.limit) queryParams.append('limit', pagination.limit);
       }
-
-      const url = `${HOTEL_FILTER_URL}?${queryParams.toString()}`;
-      console.log(`Fetching filtered hotels from: ${url}`); // For debugging
+      
+      const url = `${HOTEL_SERVICE_URL}/filter?${queryParams.toString()}`;
+      console.log(`Fetching filtered hotels from: ${url}`);
 
       try {
         const res = await fetch(url);
         if (!res.ok) {
           const errorBody = await res.text();
-          console.error(`Hotel service request failed (filterHotels) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch filtered hotels from service. Status: ${res.status}`);
+          throw new Error(`Failed to fetch filtered hotels. Status: ${res.status}: ${errorBody}`);
         }
         const serviceResponse = await res.json();
 
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          console.warn('Hotel service (filterHotels) did not return success or data:', serviceResponse);
-          return { hotels: [], pagination: null };
+          return { hotels: [], pagination: { totalItems: 0, totalPages: 0, currentPage: pagination?.page || 1, pageSize: pagination?.limit || 10 } };
         }
 
-        const mappedHotels = serviceResponse.data.map(hotel => ({
-          // Consistent mapping as in the 'hotels' resolver
-          id: hotel.id,
-          name: hotel.name,
-          city: hotel.city || hotel.location || null,
-          province: hotel.province || null,
-          country: hotel.country || null,
-          address: hotel.address || null,
-          postal_code: hotel.postal_code || null,
-          star_rating: hotel.star_rating !== undefined ? parseFloat(hotel.star_rating) : null,
-          property_type: hotel.property_type || null,
-          description: hotel.description || null,
-          phone_number: hotel.phone_number || null,
-          email: hotel.email || null,
-          website: hotel.website || null,
-          amenities: hotel.amenities || [],
-          images: hotel.images || [],
-          check_in_time: hotel.check_in_time || null,
-          check_out_time: hotel.check_out_time || null,
-          has_wifi: hotel.has_wifi,
-          has_breakfast: hotel.has_breakfast,
-          has_parking: hotel.has_parking,
-          is_pet_friendly: hotel.is_pet_friendly,
-          rooms: hotel.rooms ? hotel.rooms.map(room => ({
-            id: room.id,
-            hotel_id: hotel.id,
-            name: room.name || room.room_type_name || null,
-            description: room.description || null,
-            type_code: room.type_code || room.room_type_code || null,
-            bed_type: room.bed_type || null,
-            size_sqm: room.size_sqm !== undefined ? parseFloat(room.size_sqm) : null,
-            max_occupancy: room.max_occupancy !== undefined ? parseInt(room.max_occupancy, 10) : null,
-            price_per_night: room.price_per_night !== undefined ? parseFloat(room.price_per_night) : null,
-            amenities: room.amenities || [],
-            images: room.images || [],
-          })) : [],
-          min_price_per_night: hotel.min_price !== undefined ? parseFloat(hotel.min_price) : (hotel.min_price_per_night !== undefined ? parseFloat(hotel.min_price_per_night) : null),
-          max_price_per_night: hotel.max_price !== undefined ? parseFloat(hotel.max_price) : (hotel.max_price_per_night !== undefined ? parseFloat(hotel.max_price_per_night) : null),
-        }));
-
-        const servicePagination = serviceResponse.pagination || {};
-        const currentPage = parseInt(servicePagination.current_page || servicePagination.page, 10) || 1;
-        const totalPages = parseInt(servicePagination.total_pages || servicePagination.pages, 10) || 0;
-
-        const mappedPagination = {
-          totalItems: parseInt(servicePagination.total_items || servicePagination.total, 10) || 0,
-          totalPages: totalPages,
-          currentPage: currentPage,
-          pageSize: parseInt(servicePagination.per_page || servicePagination.limit, 10) || 0,
-          hasNextPage: currentPage < totalPages,
-          hasPrevPage: currentPage > 1,
-        };
-
         return {
-          hotels: mappedHotels,
-          pagination: mappedPagination,
+          hotels: serviceResponse.data.map(mapHotel),
+          pagination: {
+            totalItems: serviceResponse.pagination.totalItems,
+            totalPages: serviceResponse.pagination.totalPages,
+            currentPage: serviceResponse.pagination.page,
+            pageSize: serviceResponse.pagination.limit,
+          },
         };
       } catch (error) {
         console.error('Error in filterHotels resolver:', error);
-        throw new Error('An error occurred while fetching filtered hotels.');
+        throw new Error('Could not fetch filtered hotels.');
       }
     },
-    async hotelAvailability(_, { id, check_in }) {
-      let url = `${HOTEL_SERVICE_URL}/filter?`;
-      Object.entries(args).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) url += `${key}=${encodeURIComponent(value)}&`;
-      });
-      const res = await fetch(url);
-      const data = await res.json();
-      if (data.status !== 'success') return [];
-      return data.data;
-    },
-    async hotelAvailability(_, { hotelId, checkInDate, checkOutDate }) {
-      const queryParams = new URLSearchParams();
-      if (checkInDate) queryParams.append('check_in_date', checkInDate);
-      if (checkOutDate) queryParams.append('check_out_date', checkOutDate); // Assuming service supports date range
 
-      const url = `${HOTEL_SERVICE_URL}/${hotelId}/room_availability_range?${queryParams.toString()}`;
-      console.log(`Fetching hotel room availability from: ${url}`);
-
+    async hotelDailyStatus(_, { hotelId, date }) {
+      const url = `${HOTEL_SERVICE_URL}/${hotelId}/daily-status?date=${date}`;
+      console.log(`Fetching hotel daily status from: ${url}`);
       try {
         const res = await fetch(url);
         if (!res.ok) {
           const errorBody = await res.text();
-          console.error(`Hotel service request failed (hotelAvailability) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch hotel availability. Status: ${res.status}`);
+          throw new Error(`Hotel service request failed (daily-status) with status ${res.status}: ${errorBody}`);
         }
         const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          console.warn('Hotel service (hotelAvailability) did not return success or data:', serviceResponse);
+        if (serviceResponse.status !== 'success') {
           return [];
         }
-        return serviceResponse.data.map(avail => ({
-          roomTypeId: avail.room_type_id,
-          roomTypeName: avail.room_type_name,
-          date: avail.date,
-          availableCount: parseInt(avail.available_count || avail.available_rooms, 10),
-          price: parseFloat(avail.price),
-          currency: avail.currency
-        }));
+        
+        // The service now returns a single array with all the required fields.
+        // The field names in the service response match the GraphQL type, so no mapping is needed.
+        return serviceResponse.data;
       } catch (error) {
-        console.error('Error in hotelAvailability resolver:', error);
-        throw new Error('An error occurred while fetching hotel availability.');
+        console.error('Error in hotelDailyStatus resolver:', error);
+        throw new Error('Could not fetch hotel daily status.');
       }
     },
-    async hotelPricing(_, { id, check_in, check_out }) {
-      const queryParams = new URLSearchParams();
-      if (check_in) queryParams.append('check_in', check_in);
-      if (check_out) queryParams.append('check_out', check_out);
-      const url = `${HOTEL_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
-      try {
-        const res = await fetch(url);
-        if (!res.ok) {
-          const errorBody = await res.text();
-          console.error(`Hotel service request failed (hotelPricing) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch hotel pricing from service. Status: ${res.status}`);
-        }
-        const serviceResponse = await res.json();
-        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
-          return [];
-        }
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(price => ({
-              roomTypeId: price.room_type_id || price.roomTypeId || null,
-              price: price.price,
-              currency: price.currency || 'IDR',
-              date: price.date || null,
-            }))
-          : [];
-      } catch (error) {
-        throw new Error('An error occurred while fetching hotel pricing: ' + error.message);
-      }
-    }
   },
+
   Mutation: {
-    async decreaseRoomAvailability(_, { hotelId, roomTypeId, date, quantity }) {
-      if (!hotelId || !roomTypeId || !date || !quantity) {
-        throw new Error('hotelId, roomTypeId, date, and quantity are required');
-      }
+    async decreaseRoomAvailability(_, { hotelId, roomTypeName, date, quantity }) {
+      const url = `${HOTEL_SERVICE_URL}/${hotelId}/availability/decrease`;
       try {
-        const url = `${HOTEL_SERVICE_URL}/${hotelId}/availability/decrease`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room_type_id: roomTypeId, date, quantity })
+          body: JSON.stringify({ room_type_name: roomTypeName, date, quantity }),
         });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to decrease room availability');
-        return data;
-      } catch (err) {
-        throw new Error('Decrease room availability failed: ' + err.message);
+        if (!res.ok) {
+          const errorBody = await res.json();
+          throw new Error(errorBody.details || errorBody.message || 'Failed to decrease availability');
+        }
+        return await res.json();
+      } catch (error) {
+        console.error('Error in decreaseRoomAvailability resolver:', error);
+        return { status: 'error', message: error.message };
       }
     },
-    async increaseRoomAvailability(_, { hotelId, roomTypeId, date, quantity }) {
-      if (!hotelId || !roomTypeId || !date || !quantity) {
-        throw new Error('hotelId, roomTypeId, date, and quantity are required');
-      }
+
+    async increaseRoomAvailability(_, { hotelId, roomTypeName, date, quantity }) {
+      const url = `${HOTEL_SERVICE_URL}/${hotelId}/availability/increase`;
       try {
-        const url = `${HOTEL_SERVICE_URL}/${hotelId}/availability/increase`;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ room_type_id: roomTypeId, date, quantity })
+          body: JSON.stringify({ room_type_name: roomTypeName, date, quantity }),
         });
-        const data = await res.json();
-        if (data.status !== 'success') throw new Error(data.message || 'Failed to increase room availability');
-        return data;
-      } catch (err) {
-        throw new Error('Increase room availability failed: ' + err.message);
+        if (!res.ok) {
+          const errorBody = await res.text();
+          console.error(`Hotel service POST ${url} failed with status ${res.status}: ${errorBody}`);
+          let details = errorBody;
+          try { details = JSON.parse(errorBody).message || errorBody; } catch (e) { /* ignore parsing error */ }
+          throw new Error(`Failed to increase room availability. Status: ${res.status}. Message: ${details}`);
+        }
+        return res.json(); // Expects { status, message, affectedRows }
+      } catch (error) {
+        console.error('Error in increaseRoomAvailability:', error.message);
+        throw new Error(error.message || 'Error increasing room availability.');
       }
     }
   }

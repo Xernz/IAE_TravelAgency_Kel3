@@ -95,6 +95,23 @@ exports.getTrainDetails = (req, res) => {
   });
 };
 
+exports.getDailyStatus = (req, res) => {
+  const trainId = req.params.id;
+  const { date } = req.query;
+
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Date query parameter is required for daily status.' });
+  }
+
+  Train.getDailyStatus(trainId, date, (err, dailyStatus) => {
+    if (err) {
+      console.error(`Error fetching daily status for train ${trainId}, date ${date}:`, err);
+      return res.status(500).json({ status: 'error', message: 'Failed to retrieve daily status.', details: err.message });
+    }
+    res.json({ status: 'success', data: dailyStatus });
+  });
+};
+
 exports.getAvailability = (req, res) => {
   const id = req.params.id;
   const { date } = req.query;

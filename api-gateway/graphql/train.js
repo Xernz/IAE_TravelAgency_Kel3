@@ -19,15 +19,14 @@ const typeDefs = gql`
     departure_time: String
     arrival_time: String
     duration: Int
-    train_class: String
-    subclass: String
     train_type: String
     description: String
     facilities: String
-    price: Float
-    seats_available: Int
     created_at: String
     updated_at: String
+
+    # Field to get date-specific status (price, availability)
+    dailyStatus(date: String!): TrainDailyStatus
   }
 
   input TrainFiltersInput {
@@ -37,8 +36,6 @@ const typeDefs = gql`
     destination_city: String
     origin_province: String
     destination_province: String
-    train_class: String
-    subclass: String
     train_type: String
     operator: String
     min_duration: Int
@@ -75,7 +72,8 @@ const typeDefs = gql`
 
   type AvailabilityResponse {
     status: String!
-    message: String    affectedRows: Int
+    message: String
+    affectedRows: Int
   }
 
   type TrainsPage {
@@ -88,8 +86,8 @@ const typeDefs = gql`
     trains(pagination: PaginationInput): [Train]
     train(id: ID!): Train
 
-    # Pricing query for a specific train
-    trainPricing(id: ID!, date: String): [Pricing]
+    # Daily status query for a specific train (availability & pricing)
+    trainDailyStatus(trainId: ID!, date: String!): TrainDailyStatus
 
     # New filter query
     filterTrains(
@@ -100,23 +98,53 @@ const typeDefs = gql`
   }
 
   type Mutation {
-    decreaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
-    increaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!, seatClass: String): AvailabilityResponse
+    decreaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!): AvailabilityResponse
+    increaseTrainAvailability(trainId: ID!, date: String!, quantity: Int!): AvailabilityResponse
     createTrain(train_number: String!, origin: String!, destination: String!, departure_time: String!, arrival_time: String!, price: Float!, seats_available: Int!): Train
     # Add other mutations as needed
   }
 
-  type Pricing {
-    seatClass: String
+  type TrainDailyStatus {
+    trainId: ID!
+    date: String!
+    availableSeats: Int
     price: Float
     currency: String
-    date: String
   }
 `;
 
 const TRAIN_SERVICE_URL = 'http://localhost:3007/api/trains'
 
 const resolvers = {
+  Train: {
+    async dailyStatus(parent, { date }, context) {
+      const trainId = parent.id;
+      const url = `${TRAIN_SERVICE_URL}/${trainId}/daily-status?date=${date}`;
+      try {
+        const res = await fetch(url);
+        if (!res.ok) {
+          console.error(`Train service request failed for dailyStatus (trainId: ${trainId}, date: ${date}) with status ${res.status}`);
+          return null; // Return null if status not found or on error
+        }
+        const serviceResponse = await res.json();
+        if (serviceResponse.status !== 'success' || !serviceResponse.data) {
+          return null; // No data found for this date
+        }
+        // Map service data to GraphQL type
+        const statusData = serviceResponse.data;
+        return {
+          trainId: statusData.train_id,
+          date: statusData.date,
+          availableSeats: statusData.available_seats,
+          price: statusData.price,
+          currency: statusData.currency,
+        };
+      } catch (error) {
+        console.error('Error fetching train daily status in Train resolver:', error);
+        return null;
+      }
+    },
+  },
   Query: {
     // Refactored trains resolver: supports only pagination
     async trains(_, { pagination = {} }) {
@@ -149,40 +177,42 @@ const resolvers = {
         train_type: train.train_type || null,
         description: train.description || null,
         facilities: train.facilities || null,
-        price: train.price !== undefined ? parseFloat(train.price) : null,
-        seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
         created_at: train.created_at || null,
         updated_at: train.updated_at || null,
       }));
     },
-    // Explicit resolver for /:id/pricing endpoint
-     async trainPricing(_, { id, date }) {
+    // Resolver for train daily status (availability and pricing)
+     async trainDailyStatus(_, { trainId, date }) {
       const queryParams = new URLSearchParams();
       if (date) queryParams.append('date', date);
-      const url = `${TRAIN_SERVICE_URL}/${id}/pricing?${queryParams.toString()}`;
+      const url = `${TRAIN_SERVICE_URL}/${trainId}/daily-status?date=${date}`; // Assuming this endpoint provides combined daily status
       try {
         const res = await fetch(url);
         if (!res.ok) {
           const errorBody = await res.text();
-          console.error(`Train service request failed (trainPricing) with status ${res.status}: ${errorBody}`);
-          throw new Error(`Failed to fetch train pricing from service. Status: ${res.status}`);
+          console.error(`Train service request failed (trainDailyStatus) with status ${res.status}: ${errorBody}`);
+          throw new Error(`Failed to fetch train daily status from service. Status: ${res.status}`);
         }
         const serviceResponse = await res.json();
         if (serviceResponse.status !== 'success' || !serviceResponse.data) {
           return [];
         }
-        // Always return an array of Pricing objects
-        return Array.isArray(serviceResponse.data)
-          ? serviceResponse.data.map(price => ({
-              seatClass: price.seat_class || null,
-              price: price.price,
-              currency: price.currency || 'IDR',
-              date: price.date || null,
-            }))
-          : serviceResponse.data ? [serviceResponse.data] : [];
+        // Expecting serviceResponse.data to be an object or an array with a single object for the daily status
+        // e.g., { train_id, date, available_seats, price, currency }
+        // Map to GraphQL TrainDailyStatus
+        const statusData = serviceResponse.data;
+        if (!statusData) return null; // Or throw error if data is expected
+
+        return {
+          trainId: statusData.train_id || trainId,
+          date: statusData.date || date,
+          availableSeats: statusData.available_seats,
+          price: statusData.price,
+          currency: statusData.currency
+        };
       } catch (error) {
-        // TODO: Add monitoring/logging for trainPricing errors
-        throw new Error('An error occurred while fetching train pricing: ' + error.message);
+        // TODO: Add monitoring/logging for trainDailyStatus errors
+        throw new Error('An error occurred while fetching train daily status: ' + error.message);
       }
     },
 
@@ -212,8 +242,7 @@ const resolvers = {
         train_type: train.train_type || null,
         description: train.description || null,
         facilities: train.facilities || null,
-        price: train.price !== undefined ? parseFloat(train.price) : null,
-        seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
+
         created_at: train.created_at || null,
         updated_at: train.updated_at || null,
       };
@@ -259,22 +288,25 @@ const resolvers = {
 
         const mappedTrains = serviceResponse.data.map(train => ({
           id: train.id,
-          train_number: train.train_number || train.train_no || null,
-          origin_station_name: train.origin_station_name || train.origin_station_code || train.origin || null,
-          destination_station_name: train.destination_station_name || train.destination_station_code || train.destination || null,
+          train_number: train.train_number || train.train_code || train.train_no || null, // train_code is an alias from service
+          name: train.name || null,
+          operator: train.operator || null,
+          origin_station_code: train.origin_station_code || null,
+          origin_station_name: train.origin_station_name || null,
           origin_city: train.origin_city || null,
-          destination_city: train.destination_city || null,
           origin_province: train.origin_province || null,
+          destination_station_code: train.destination_station_code || null,
+          destination_station_name: train.destination_station_name || null,
+          destination_city: train.destination_city || null,
           destination_province: train.destination_province || null,
           departure_time: train.departure_time || null,
           arrival_time: train.arrival_time || null,
-          price: train.price !== undefined ? parseFloat(train.price) : null,
-          seats_available: train.seats_available !== undefined ? parseInt(train.seats_available, 10) : null,
-          train_class: train.train_class || null,
-          subclass: train.subclass || null,
+          duration: train.duration !== undefined ? parseInt(train.duration, 10) : (train.travel_duration !== undefined ? parseInt(train.travel_duration, 10) : null), // travel_duration is an alias from service
           train_type: train.train_type || null,
-          operator: train.operator || null,
-          duration: train.duration !== undefined ? parseInt(train.duration, 10) : null,
+          description: train.description || null,
+          facilities: train.facilities || null,
+          created_at: train.created_at || null,
+          updated_at: train.updated_at || null
         }));
 
         const servicePagination = serviceResponse.pagination || {};
@@ -301,14 +333,13 @@ const resolvers = {
     },
   },
   Mutation: {
-    async decreaseTrainAvailability(_, { trainId, date, quantity, seatClass }) {
+    async decreaseTrainAvailability(_, { trainId, date, quantity }) {
       if (!trainId || !date || !quantity) {
         throw new Error('trainId, date, and quantity are required');
       }
       try {
         const url = `${TRAIN_SERVICE_URL}/${trainId}/availability/decrease`;
         const body = { date, quantity };
-        if (seatClass) body.seat_class = seatClass;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -321,14 +352,13 @@ const resolvers = {
         throw new Error('Decrease train availability failed: ' + err.message);
       }
     },
-    async increaseTrainAvailability(_, { trainId, date, quantity, seatClass }) {
+    async increaseTrainAvailability(_, { trainId, date, quantity }) {
       if (!trainId || !date || !quantity) {
         throw new Error('trainId, date, and quantity are required');
       }
       try {
         const url = `${TRAIN_SERVICE_URL}/${trainId}/availability/increase`;
         const body = { date, quantity };
-        if (seatClass) body.seat_class = seatClass;
         const res = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

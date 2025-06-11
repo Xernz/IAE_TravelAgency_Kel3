@@ -5,10 +5,10 @@ const Hotel = {
   // Create a new Hotel entry
   create: (data, callback) => {
     const {
-      name, city, province, address, description, stars, phone, email
+      name, city, province, address, description, star_rating, property_type, facilities
     } = data;
-    const sql = `INSERT INTO Hotels (name, city, province, address, description, stars, phone, email) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-    const values = [name, city, province, address, description, stars, phone, email];
+    const sql = `INSERT INTO Hotels (name, city, province, address, description, star_rating, property_type, facilities) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+    const values = [name, city, province, address, description, star_rating, property_type, facilities];
     db.query(sql, values, callback);
   },
   // Update an existing Hotel entry
@@ -16,7 +16,7 @@ const Hotel = {
     const fields = [];
     const values = [];
     [
-      'name', 'city', 'province', 'address', 'description', 'stars', 'phone', 'email'
+      'name', 'city', 'province', 'address', 'description', 'star_rating', 'property_type', 'facilities'
     ].forEach(field => {
       if (data[field] !== undefined) {
         fields.push(`${field} = ?`);
@@ -29,24 +29,38 @@ const Hotel = {
     db.query(sql, values, callback);
   },
 
-  // Decrease available rooms for a room type and date
-  decreaseAvailability: (roomTypeId, date, quantity, callback) => {
+  // Decrease available rooms for a specific room type on a date
+  decreaseAvailability: (hotelId, roomTypeName, date, quantity, callback) => {
     db.query(
-      'UPDATE RoomAvailability SET available_rooms = available_rooms - ? WHERE room_type_id = ? AND date = ? AND available_rooms >= ?;',
-      [quantity, roomTypeId, date, quantity],
+      'UPDATE HotelDailyStatus SET available_rooms = available_rooms - ? WHERE hotel_id = ? AND room_type_name = ? AND date = ? AND available_rooms >= ?;',
+      [quantity, hotelId, roomTypeName, date, quantity],
       (err, result) => {
         if (err) return callback(err);
-        callback(null, result);
+        if (result.affectedRows === 0) {
+            // Could be due to insufficient rooms or record not found
+            // Check if record exists to differentiate
+            db.query('SELECT available_rooms FROM HotelDailyStatus WHERE hotel_id = ? AND room_type_name = ? AND date = ?', [hotelId, roomTypeName, date], (selectErr, selectRes) => {
+                if (selectErr) return callback(selectErr);
+                if (selectRes.length === 0) return callback(new Error('Availability record not found for the given hotel, room type, and date.'));
+                if (selectRes[0].available_rooms < quantity) return callback(new Error('Not enough available rooms.'));
+                return callback(new Error('Failed to decrease availability for an unknown reason.'));
+            });
+        } else {
+            callback(null, result);
+        }
       }
     );
   },
-  // Increase available rooms for a room type and date
-  increaseAvailability: (roomTypeId, date, quantity, callback) => {
+  // Increase available rooms for a specific room type on a date
+  increaseAvailability: (hotelId, roomTypeName, date, quantity, callback) => {
     db.query(
-      'UPDATE RoomAvailability SET available_rooms = available_rooms + ? WHERE room_type_id = ? AND date = ?;',
-      [quantity, roomTypeId, date],
+      'UPDATE HotelDailyStatus SET available_rooms = available_rooms + ? WHERE hotel_id = ? AND room_type_name = ? AND date = ?;',
+      [quantity, hotelId, roomTypeName, date],
       (err, result) => {
         if (err) return callback(err);
+        // It's possible the row didn't exist if increasing from 0 after a full depletion and manual adjustment, 
+        // or if trying to increase for a non-existent record. For simplicity, we don't create it here.
+        // If result.affectedRows === 0 and no error, it means no row matched the criteria.
         callback(null, result);
       }
     );
@@ -89,73 +103,130 @@ const Hotel = {
   },
   
   filter: (params, callback) => {
-    const { 
-      name, city, province, kabupaten, postal_code, property_type, min_star_rating, max_star_rating,
-      min_price, max_price, has_breakfast, has_wifi, room_size_min, amenities,
-      sort_by, sort_order, page, limit
+    const {
+      // Hotel specific filters
+      name, city, province, stars, property_type, facilities, // 'stars' is used instead of min_star_rating/max_star_rating for simplicity
+      // DailyStatus specific filters - 'date' is the key trigger
+      date, room_type_name, min_price, max_price,
+      // General query control
+      sort_by, sort_order, page = 1, limit = 10 // Default pagination
     } = params;
-    // Note: property_type in DB maps to accommodation_type in API
-    let baseSql = `
-      SELECT h.*, rt.type as room_type, rt.bed_type, rt.has_breakfast, rt.has_wifi, 
-             rt.room_size, rp.price, rp.currency
-      FROM Hotels h
-      LEFT JOIN RoomTypes rt ON h.id = rt.hotel_id
-      LEFT JOIN RoomPricing rp ON rt.id = rp.room_type_id
-      WHERE 1=1
-    `;
-    
-    const filters = [];
+
+    let baseSql;
     const values = [];
+    const filters = [];
+
+    // Add Hotel specific filters first, as they apply whether joining or not
+    // These filters will be prefixed with 'h.' in the SQL
     if (name) { filters.push('h.name LIKE ?'); values.push(`%${name}%`); }
-    if (city) { filters.push('h.city = ?'); values.push(city); }
-    if (province) { filters.push('h.province = ?'); values.push(province); }
-    if (kabupaten) { filters.push('h.kabupaten = ?'); values.push(kabupaten); }
-    if (postal_code) { filters.push('h.postal_code = ?'); values.push(postal_code); }
-    if (property_type) { filters.push('h.property_type = ?'); values.push(property_type); }
-    if (min_star_rating) { filters.push('h.star_rating >= ?'); values.push(min_star_rating); }
-    if (max_star_rating) { filters.push('h.star_rating <= ?'); values.push(max_star_rating); }
-    if (min_price) { filters.push('rp.price >= ?'); values.push(min_price); }
-    if (max_price) { filters.push('rp.price <= ?'); values.push(max_price); }
-    if (has_breakfast !== undefined) { filters.push('rt.has_breakfast = ?'); values.push(has_breakfast); }
-    if (has_wifi !== undefined) { filters.push('rt.has_wifi = ?'); values.push(has_wifi); }
-    if (room_size_min) { filters.push('rt.room_size >= ?'); values.push(room_size_min); }
-    if (amenities) { filters.push('h.facilities LIKE ?'); values.push(`%${amenities}%`); }
-    
+    if (city) { filters.push('h.city LIKE ?'); values.push(`%${city}%`); }
+    if (province) { filters.push('h.province LIKE ?'); values.push(`%${province}%`); }
+    if (stars) { filters.push('h.star_rating = ?'); values.push(stars); }
+    // Assuming 'property_type' and 'facilities' columns exist in the 'Hotels' table
+    if (property_type) { filters.push('h.property_type LIKE ?'); values.push(`%${property_type}%`); }
+    if (facilities) { filters.push('h.facilities LIKE ?'); values.push(`%${facilities}%`); }
+
+    if (date) { // If a date is provided, we join with HotelDailyStatus
+      baseSql = `
+        SELECT DISTINCT h.id, h.name, h.city, h.province, h.address, h.description, h.stars, h.phone, h.email, h.property_type, h.facilities
+        FROM Hotels h
+        JOIN HotelDailyStatus hds ON h.id = hds.hotel_id
+        WHERE 1=1 AND hds.available_rooms > 0 
+      `; // Base condition for join: rooms must be available
+      
+      // Add date filter for HotelDailyStatus
+      filters.push('hds.date = ?');
+      values.push(date);
+
+      // Add other DailyStatus specific filters
+      if (room_type_name) {
+        filters.push('hds.room_type_name LIKE ?');
+        values.push(`%${room_type_name}%`);
+      }
+      if (min_price !== undefined) {
+        filters.push('hds.price >= ?');
+        values.push(min_price);
+      }
+      if (max_price !== undefined) {
+        filters.push('hds.price <= ?');
+        values.push(max_price);
+      }
+    } else { // No date provided, only filter on Hotels table
+      baseSql = `
+        SELECT h.id, h.name, h.city, h.province, h.address, h.description, h.star_rating, h.property_type, h.facilities
+        FROM Hotels h
+        WHERE 1=1
+      `;
+      // Hotel-specific filters are already added to `filters` and `values`.
+      // DailyStatus filters (room_type_name, min_price, max_price) are ignored if no date is provided.
+    }
+
     let whereClause = '';
     if (filters.length > 0) {
       whereClause = ' AND ' + filters.join(' AND ');
     }
     let sql = baseSql + whereClause;
-    // Sorting
-    const validSortColumns = ['name', 'star_rating', 'price', 'room_size'];
-    const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'name';
-    const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-    if (sortColumn === 'price') {
-      sql += ` ORDER BY rp.${sortColumn} ${order}`;
-    } else if (sortColumn === 'room_size') {
-      sql += ` ORDER BY rt.${sortColumn} ${order}`;
-    } else {
-      sql += ` ORDER BY h.${sortColumn} ${order}`;
+
+    // Count query construction
+    let countSql;
+    if (date) { // Joined with HotelDailyStatus
+      countSql = `
+        SELECT COUNT(DISTINCT h.id) as total
+        FROM Hotels h
+        JOIN HotelDailyStatus hds ON h.id = hds.hotel_id
+        WHERE 1=1 AND hds.available_rooms > 0 ${whereClause}
+      `;
+    } else { // Only Hotels table
+      countSql = `
+        SELECT COUNT(h.id) as total
+        FROM Hotels h
+        WHERE 1=1 ${whereClause}
+      `;
     }
+    const whereClauseValues = [...values]; // Values for the WHERE clause, used by both count and main query (before pagination)
+
+    // Sorting
+    const validSortColumnsHotel = ['name', 'stars', 'city', 'province'];
+    const validSortColumnsDailyStatus = ['price'];
+    let sortColumn = 'h.name'; // Default sort
+    let effectiveSortBy = sort_by || 'name';
+
+    if (validSortColumnsHotel.includes(effectiveSortBy)) {
+      sortColumn = `h.${effectiveSortBy}`;
+    } else if (date && validSortColumnsDailyStatus.includes(effectiveSortBy)) { // Sort by price only if date is provided (implies join)
+      sortColumn = `hds.${effectiveSortBy}`;
+    } else {
+      // If sort_by is not recognized or not applicable (e.g. price without date), default to sorting by name
+      effectiveSortBy = 'name'; 
+      sortColumn = 'h.name';
+    }
+    const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+    sql += ` ORDER BY ${sortColumn} ${order}`;
+
     // Pagination
-    const { sql: paginatedSql, values: paginationValues, pagination } = paginateQuery(sql, { page, limit });
-    const allValues = [...values, ...paginationValues];
-    // Build count query with same filters
-    let countSql = `
-      SELECT COUNT(DISTINCT h.id) as total
-      FROM Hotels h
-      LEFT JOIN RoomTypes rt ON h.id = rt.hotel_id
-      LEFT JOIN RoomPricing rp ON rt.id = rp.room_type_id
-      WHERE 1=1${whereClause}
-    `;
-    // Execute count query first
-    db.query(countSql, values, (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
+    const { sql: paginatedSql, values: paginationOnlyValues, pagination } 
+      = paginateQuery(sql, { page, limit });
+    const allQueryValues = [...whereClauseValues, ...paginationOnlyValues];
+
+    // Execute count query
+    db.query(countSql, whereClauseValues, (countErr, countResults) => {
+      if (countErr) {
+        console.error("Error in count query:", countErr, "SQL:", countSql, "Values:", whereClauseValues);
+        return callback(countErr);
+      }
+      if (!countResults || countResults.length === 0) {
+        // This case should ideally not happen if the SQL is valid and DB is up, but good to check.
+        console.error("No results from count query. SQL:", countSql, "Values:", whereClauseValues);
+        return callback(new Error("Failed to get total count for hotels."));
+      }
       const totalItems = countResults[0].total;
-      // Then execute the paginated query
-      db.query(paginatedSql, allValues, (err, results) => {
-        if (err) return callback(err, null);
-        // Format the response with pagination metadata
+
+      // Execute paginated data query
+      db.query(paginatedSql, allQueryValues, (err, results) => {
+        if (err) {
+          console.error("Error in data query:", err, "SQL:", paginatedSql, "Values:", allQueryValues);
+          return callback(err);
+        }
         const response = paginatedResponse(results, pagination, totalItems);
         callback(null, response);
       });
@@ -164,14 +235,11 @@ const Hotel = {
   getById: (id, callback) => {
     db.query('SELECT * FROM Hotels WHERE id = ?', [id], (err, results) => callback(err, results[0]));
   },
-  getRoomTypes: (hotelId, callback) => {
-    db.query('SELECT * FROM RoomTypes WHERE hotel_id = ?', [hotelId], (err, results) => callback(err, results));
-  },
-  getAvailability: (roomTypeId, date, callback) => {
-    db.query('SELECT * FROM RoomAvailability WHERE room_type_id = ? AND date = ?', [roomTypeId, date], (err, results) => callback(err, results[0]));
-  },
-  getPricing: (roomTypeId, date, callback) => {
-    db.query('SELECT * FROM RoomPricing WHERE room_type_id = ? AND date = ?', [roomTypeId, date], (err, results) => callback(err, results[0]));
+  // getRoomTypes method removed as RoomTypes table is obsolete.
+
+  getDailyStatus: (hotelId, date, callback) => {
+    const sql = 'SELECT room_type_name, date, available_rooms, price, currency FROM HotelDailyStatus WHERE hotel_id = ? AND date = ?';
+    db.query(sql, [hotelId, date], callback);
   }
 };
 

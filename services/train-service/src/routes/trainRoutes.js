@@ -16,6 +16,9 @@ router.get('/search', trainController.searchTrains);
 // Get train details
 router.get('/:id', trainController.getTrainDetails);
 
+// Get daily status (availability and pricing) for a train (requires date query param)
+router.get('/:id/daily-status', trainController.getDailyStatus);
+
 // Get availability for a train (requires date param)
 router.get('/:id/availability', trainController.getAvailability);
 

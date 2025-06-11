@@ -82,27 +82,67 @@ const Train = {
     let joinParams = [];
     if (departure_date) {
       baseSql = `
-        SELECT t.*, 
-               t.train_code AS train_number, 
-               t.travel_duration AS duration,
-               tp.price, tp.currency, tp.price_category,
-               ta.available_seats AS seats_available
+        SELECT
+            t.id,
+            t.name,
+            t.operator,
+            t.origin_station_code,
+            t.origin_station_name,
+            t.origin_city,
+            t.origin_province,
+            t.destination_station_code,
+            t.destination_station_name,
+            t.destination_city,
+            t.destination_province,
+            t.departure_time,
+            t.arrival_time,
+            t.train_type,
+            t.description,
+            t.facilities,
+            t.created_at,
+            t.updated_at,
+            -- Aliases required by GraphQL schema or resolvers
+            t.train_code AS train_number, 
+            t.travel_duration AS duration,
+            -- Fields from TrainDailyStatus for price/availability context
+            tds.price, 
+            tds.currency,
+            tds.available_seats AS seats_available
         FROM Trains t
-        LEFT JOIN TrainPricing tp ON t.id = tp.train_id AND tp.date = ?
-        LEFT JOIN TrainAvailability ta ON t.id = ta.train_id AND ta.date = ?
+        LEFT JOIN TrainDailyStatus tds ON t.id = tds.train_id AND tds.date = ?
         WHERE 1=1
       `;
-      joinParams = [departure_date, departure_date];
+      joinParams = [departure_date];
     } else {
       baseSql = `
-        SELECT t.*, 
-               t.train_code AS train_number, 
-               t.travel_duration AS duration,
-               tp.price, tp.currency, tp.price_category,
-               ta.available_seats AS seats_available
+        SELECT
+            t.id,
+            t.name,
+            t.operator,
+            t.origin_station_code,
+            t.origin_station_name,
+            t.origin_city,
+            t.origin_province,
+            t.destination_station_code,
+            t.destination_station_name,
+            t.destination_city,
+            t.destination_province,
+            t.departure_time,
+            t.arrival_time,
+            t.train_type,
+            t.description,
+            t.facilities,
+            t.created_at,
+            t.updated_at,
+            -- Aliases required by GraphQL schema or resolvers
+            t.train_code AS train_number, 
+            t.travel_duration AS duration,
+            -- Fields from TrainDailyStatus for price/availability context
+            tds.price, 
+            tds.currency,
+            tds.available_seats AS seats_available
         FROM Trains t
-        LEFT JOIN TrainPricing tp ON t.id = tp.train_id
-        LEFT JOIN TrainAvailability ta ON t.id = ta.train_id
+        LEFT JOIN TrainDailyStatus tds ON t.id = tds.train_id /* No date condition in JOIN if not provided by filter */
         WHERE 1=1
       `;
       joinParams = [];
@@ -117,14 +157,14 @@ const Train = {
     if (destination_province) { baseSql += ' AND t.destination_province = ?'; values.push(destination_province); }
     if (subclass) { baseSql += ' AND t.subclass = ?'; values.push(subclass); }
     if (train_type) { baseSql += ' AND t.train_type = ?'; values.push(train_type); }
-    if (price_category) { baseSql += ' AND tp.price_category = ?'; values.push(price_category); }
+    // if (price_category) { baseSql += ' AND tp.price_category = ?'; values.push(price_category); } // price_category removed from TrainDailyStatus
     if (train_class) { baseSql += ' AND t.train_class = ?'; values.push(train_class); }
     if (operator) { baseSql += ' AND t.operator = ?'; values.push(operator); }
     if (min_duration) { baseSql += ' AND t.travel_duration >= ?'; values.push(min_duration); }
     if (max_duration) { baseSql += ' AND t.travel_duration <= ?'; values.push(max_duration); }
-    if (min_price) { baseSql += ' AND tp.price >= ?'; values.push(min_price); }
-    if (max_price) { baseSql += ' AND tp.price <= ?'; values.push(max_price); }
-    if (departure_date) { baseSql += ' AND tp.date = ?'; values.push(departure_date); }
+    if (min_price) { baseSql += ' AND tds.price >= ?'; values.push(min_price); }
+    if (max_price) { baseSql += ' AND tds.price <= ?'; values.push(max_price); }
+    // if (departure_date) { baseSql += ' AND tds.date = ?'; values.push(departure_date); } // Handled by JOIN condition when departure_date is present
     
     // Add sorting
     if (sort_by && sort_order) {
@@ -132,7 +172,7 @@ const Train = {
       const validSortOrders = ['ASC', 'DESC'];
       
       if (validSortColumns.includes(sort_by) && validSortOrders.includes(sort_order.toUpperCase())) {
-        const sortColumn = sort_by === 'price' ? 'tp.price' : `t.${sort_by}`;
+        const sortColumn = sort_by === 'price' ? 'tds.price' : `t.${sort_by}`;
         baseSql += ` ORDER BY ${sortColumn} ${sort_order.toUpperCase()}`;
       } else {
         // Default sorting
@@ -145,30 +185,44 @@ const Train = {
     
     // Count total items for pagination metadata
     // We need to use a modified version of the query for counting
-    let countSql = `
-      SELECT COUNT(*) as total
+    let countSqlBase = `
+      SELECT COUNT(DISTINCT t.id) as total /* Use COUNT(DISTINCT t.id) if TrainDailyStatus can cause duplicates for a single train */
       FROM Trains t
-      LEFT JOIN TrainPricing tp ON t.id = tp.train_id
-      WHERE 1=1
-    `;
+    `; 
+    let countSqlJoins = '';
+    let countSqlWhere = ' WHERE 1=1';
+
+    // Add join for TrainDailyStatus. If departure_date is present, join on that date.
+    // Otherwise, join without a date condition (which might count trains if they have *any* daily status entry, or none if strictly filtering on price later)
+    // This logic depends on whether we want to count trains that *could* match price criteria on *any* day, or only on a *specific* day.
+    // For now, if departure_date is given, we join on it. Otherwise, we join without a date to allow for price filtering across any date.
+    if (departure_date || min_price || max_price) { // Only join if we need to filter by date or price
+        countSqlJoins += ` LEFT JOIN TrainDailyStatus tds ON t.id = tds.train_id`;
+        if (departure_date) {
+            countSqlJoins += ' AND tds.date = ?'; 
+            // Note: 'values' for countSql will need departure_date if this path is taken.
+        }
+    }
+
     
     // Add the same WHERE conditions to the count query
-    if (origin_station_code) { countSql += ' AND t.origin_station_code = ?'; }
-    if (destination_station_code) { countSql += ' AND t.destination_station_code = ?'; }
-    if (origin_city) { countSql += ' AND t.origin_city = ?'; }
-    if (destination_city) { countSql += ' AND t.destination_city = ?'; }
-    if (origin_province) { countSql += ' AND t.origin_province = ?'; }
-    if (destination_province) { countSql += ' AND t.destination_province = ?'; }
-    if (subclass) { countSql += ' AND t.subclass = ?'; }
-    if (train_type) { countSql += ' AND t.train_type = ?'; }
-    if (price_category) { countSql += ' AND tp.price_category = ?'; }
-    if (train_class) { countSql += ' AND t.train_class = ?'; }
-    if (operator) { countSql += ' AND t.operator = ?'; }
-    if (min_duration) { countSql += ' AND t.duration >= ?'; }
-    if (max_duration) { countSql += ' AND t.duration <= ?'; }
-    if (min_price) { countSql += ' AND tp.price >= ?'; }
-    if (max_price) { countSql += ' AND tp.price <= ?'; }
-    if (departure_date) { countSql += ' AND tp.date = ?'; }
+    if (origin_station_code) { countSqlWhere += ' AND t.origin_station_code = ?'; }
+    if (destination_station_code) { countSqlWhere += ' AND t.destination_station_code = ?'; }
+    if (origin_city) { countSqlWhere += ' AND t.origin_city = ?'; }
+    if (destination_city) { countSqlWhere += ' AND t.destination_city = ?'; }
+    if (origin_province) { countSqlWhere += ' AND t.origin_province = ?'; }
+    if (destination_province) { countSqlWhere += ' AND t.destination_province = ?'; }
+    if (subclass) { countSqlWhere += ' AND t.subclass = ?'; }
+    if (train_type) { countSqlWhere += ' AND t.train_type = ?'; }
+    // if (price_category) { countSqlWhere += ' AND tds.price_category = ?'; } // price_category removed
+    if (train_class) { countSqlWhere += ' AND t.train_class = ?'; }
+    if (operator) { countSqlWhere += ' AND t.operator = ?'; }
+    if (min_duration) { countSqlWhere += ' AND t.travel_duration >= ?'; } // Corrected from t.duration
+    if (max_duration) { countSqlWhere += ' AND t.travel_duration <= ?'; } // Corrected from t.duration
+    if (min_price) { countSqlWhere += ' AND tds.price >= ?'; }
+    if (max_price) { countSqlWhere += ' AND tds.price <= ?'; }
+    // if (departure_date) { countSqlWhere += ' AND tds.date = ?'; } // Handled by JOIN condition when departure_date is present in countSqlJoins
+    const countSql = countSqlBase + countSqlJoins + countSqlWhere;
     
     // Apply pagination
     const { sql, values: paginationValues, pagination } = paginateQuery(baseSql, { page, limit });
@@ -180,7 +234,19 @@ const Train = {
     console.log('Train.filter VALUES:', allValues);
     
     // Execute count query first
-    db.query(countSql, values, (countErr, countResults) => {
+      // Prepare values for the countSql query.
+    // The `values` array already contains parameters for the WHERE conditions (from baseSql's WHERE part).
+    // We only need to prepend `departure_date` if it's part of the `countSqlJoins`.
+    let finalCountValuesForQuery = [];
+    if (departure_date && countSqlJoins.includes('tds.date = ?')) {
+        finalCountValuesForQuery.push(departure_date);
+    }
+    finalCountValuesForQuery.push(...values); // Appends all values from the `values` array
+
+    console.log('Train.filter countSQL:', countSql);
+    console.log('Train.filter countValues:', finalCountValuesForQuery);
+
+    db.query(countSql, finalCountValuesForQuery, (countErr, countResults) => {
       if (countErr) return callback(countErr, null);
       
       const totalItems = countResults[0].total;
@@ -219,20 +285,23 @@ const Train = {
         t.departure_time,
         t.arrival_time,
         t.travel_duration AS duration,
-        t.train_class,
-        t.subclass,
+        /* t.train_class, -- train_class is not directly in Trains table based on schema.sql, assuming it was from old structure or meant to be derived 
+        t.subclass, -- subclass is not directly in Trains table based on schema.sql */
         t.train_type,
-        tp.price,
-        tp.currency,
-        tp.price_category,
-        ta.available_seats AS seats_available
+        t.description,
+        t.facilities,
+        t.created_at,
+        t.updated_at,
+        tds.price,
+        tds.currency,
+        /* tp.price_category, -- price_category removed */
+        tds.available_seats AS seats_available
       FROM Trains t
-      LEFT JOIN TrainPricing tp ON t.id = tp.train_id AND tp.date = ?
-      LEFT JOIN TrainAvailability ta ON t.id = ta.train_id AND ta.date = ?
+      LEFT JOIN TrainDailyStatus tds ON t.id = tds.train_id AND tds.date = ?
       WHERE t.id = ?
       LIMIT 1
     `;
-    params = [departure_date, departure_date, id];
+    params = [departure_date, id];
   } else {
     sql = `
       SELECT 
@@ -251,16 +320,18 @@ const Train = {
         t.departure_time,
         t.arrival_time,
         t.travel_duration AS duration,
-        t.train_class,
-        t.subclass,
+        /* t.train_class, -- Not in Trains table 
+        t.subclass, -- Not in Trains table */
         t.train_type,
-        tp.price,
-        tp.currency,
-        tp.price_category,
-        ta.available_seats AS seats_available
+        t.description,
+        t.facilities,
+        t.created_at,
+        t.updated_at,
+        NULL AS price,
+        NULL AS currency,
+        /* tp.price_category, -- Removed */
+        NULL AS seats_available
       FROM Trains t
-      LEFT JOIN TrainPricing tp ON t.id = tp.train_id
-      LEFT JOIN TrainAvailability ta ON t.id = ta.train_id
       WHERE t.id = ?
       LIMIT 1
     `;
@@ -272,7 +343,43 @@ const Train = {
     if (!results || !Array.isArray(results) || results.length === 0) return callback(null, null);
     callback(null, results[0]);
   });
-},  
+},
+  getDailyStatus: (trainId, date, callback) => {
+    const sql = `
+      SELECT 
+        tds.train_id, 
+        tds.date, 
+        tds.available_seats, 
+        tds.price, 
+        tds.currency 
+      FROM TrainDailyStatus tds 
+      WHERE tds.train_id = ? AND tds.date = ? 
+      LIMIT 1;`;
+    const params = [trainId, date];
+    db.query(sql, params, (err, results) => {
+      if (err) {
+        return callback(err, null);
+      }
+      if (!results || results.length === 0) {
+        return callback(null, null); // No status found for this train on this date
+      }
+      // The DB column names match the GraphQL TrainDailyStatus type fields (trainId, date, availableSeats, price, currency)
+      // but the service might return train_id, available_seats. The gateway resolver maps these.
+      // For direct service response, ensure consistency or map here if needed.
+      // Current selection: train_id, date, available_seats, price, currency.
+      // Gateway expects: trainId, date, availableSeats, price, currency.
+      // Let's return fields as they are in DB and let gateway map, or map here for consistency.
+      // Mapping here for clarity for the service layer:
+      const dailyStatusData = results[0];
+      callback(null, {
+        train_id: dailyStatusData.train_id, // or trainId if preferred for service consistency
+        date: dailyStatusData.date, // Ensure date format is YYYY-MM-DD string
+        available_seats: dailyStatusData.available_seats, // maps to availableSeats in GQL
+        price: dailyStatusData.price,
+        currency: dailyStatusData.currency
+      });
+    });
+  },  
   getAvailability: (trainId, date, callback) => {
     db.query('SELECT * FROM TrainAvailability WHERE train_id = ? AND date = ?', [trainId, date], (err, results) => callback(err, results[0]));
   },

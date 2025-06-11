@@ -1,158 +1,103 @@
 const Flight = require('../models/Flight');
 
-// Create a new Flight entry
-exports.createFlight = (req, res) => {
-  const data = req.body;
-  Flight.create(data, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Failed to create flight', details: err.message });
-    // Fetch the created entry by insertId
-    Flight.getById(result.insertId, (err2, created) => {
-      if (err2) return res.status(500).json({ status: 'error', message: 'Created but failed to retrieve', details: err2.message });
-      res.status(201).json({ status: 'success', data: created });
-    });
-  });
-};
-
-// Update an existing Flight entry
-exports.updateFlight = (req, res) => {
-  const id = req.params.id;
-  const data = req.body;
-  Flight.update(id, data, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Failed to update flight', details: err.message });
-    if (result.affectedRows === 0) return res.status(404).json({ status: 'error', message: 'Flight not found or no changes made' });
-    // Fetch the updated entry
-    Flight.getById(id, (err2, updated) => {
-      if (err2) return res.status(500).json({ status: 'error', message: 'Updated but failed to retrieve', details: err2.message });
-      res.json({ status: 'success', data: updated });
-    });
-  });
-};
-
-// Decrease flight seat availability (booking)
-exports.decreaseAvailability = (req, res) => {
-  const flightId = req.params.id;
-  const { date, quantity = 1 } = req.body;
-  if (!date) {
-    return res.status(400).json({ status: 'error', message: 'Missing date' });
-  }
-  Flight.decreaseAvailability(flightId, date, quantity, (err, result) => {
-    if (err) {
-      return res.status(500).json({ status: 'error', message: 'Failed to decrease availability', details: err.message });
-    }
-    res.json({ status: 'success', message: 'Availability decreased', affectedRows: result.affectedRows });
-  });
-};
-
-// Increase flight seat availability (cancellation)
-exports.increaseAvailability = (req, res) => {
-  const flightId = req.params.id;
-  const { date, quantity = 1 } = req.body;
-  if (!date) {
-    return res.status(400).json({ status: 'error', message: 'Missing date' });
-  }
-  Flight.increaseAvailability(flightId, date, quantity, (err, result) => {
-    if (err) {
-      return res.status(500).json({ status: 'error', message: 'Failed to increase availability', details: err.message });
-    }
-    res.json({ status: 'success', message: 'Availability increased', affectedRows: result.affectedRows });
-  });
-};
-
-exports.searchFlights = (req, res) => {
-  const { origin_city, destination_city, date } = req.query;
-  Flight.search({ origin_city, destination_city, date }, (err, flights) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Search failed' });
-    res.json({ status: 'success', data: flights });
-  });
-};
-
-exports.listAllFlights = (req, res) => {
-  const { page, limit } = req.query;
-  Flight.listAll({ page, limit }, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Failed to retrieve flights' });
-    res.json({ 
-      status: 'success', 
-      data: result.data,
-      pagination: result.pagination 
-    });
-  });
-};
-
-exports.filterFlights = (req, res) => {
-  const { 
-    origin_city, destination_city, origin_code, destination_code,
-    airline_code, airline_name, flight_class, departure_date,
-    min_price, max_price, sort_by, sort_order, page, limit 
-  } = req.query;
-  
-  // Convert string parameters to appropriate types
-  const params = {
-    origin_city, 
-    destination_city, 
-    origin_code, 
-    destination_code,
-    airline_code, 
-    airline_name, 
-    flight_class, 
-    departure_date,
-    min_price: min_price ? parseFloat(min_price) : undefined,
-    max_price: max_price ? parseFloat(max_price) : undefined,
-    sort_by, 
-    sort_order,
-    page,
-    limit
-  };
-  console.log('filterFlights called with params:', params);
+exports.createFlight = async (req, res) => {
   try {
-    Flight.filter(params, (err, result) => {
-      if (err) {
-        console.error('Error filtering flights:', err);
-        return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
-      }
-      res.json({ 
-        status: 'success', 
-        data: result.data,
-        pagination: result.pagination 
-      });
-    });
-  } catch (err) {
-    console.error('Unexpected error in filterFlights:', err);
-    return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    const createdFlight = await Flight.create(req.body);
+    res.status(201).json({ status: 'success', data: createdFlight });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to create flight', details: error.message });
   }
 };
 
-exports.getFlightDetails = (req, res) => {
-  const id = req.params.id;
-  Flight.getById(id, (err, flight) => {
-    if (!flight) return res.status(404).json({ status: 'error', message: 'Flight not found' });
+exports.updateFlight = async (req, res) => {
+  try {
+    const wasUpdated = await Flight.update(req.params.id, req.body);
+    if (!wasUpdated) {
+      return res.status(404).json({ status: 'error', message: 'Flight not found or no changes made' });
+    }
+    const updatedFlight = await Flight.getById(req.params.id);
+    res.json({ status: 'success', data: updatedFlight });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to update flight', details: error.message });
+  }
+};
+
+exports.decreaseAvailability = async (req, res) => {
+  const { id } = req.params;
+  const { date, quantity = 1 } = req.body;
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Missing date' });
+  }
+  try {
+    const wasDecreased = await Flight.decreaseAvailability(id, date, quantity);
+    if (wasDecreased) {
+      res.json({ status: 'success', message: 'Availability decreased' });
+    } else {
+      res.status(400).json({ status: 'error', message: 'Failed to decrease availability (e.g., insufficient seats)' });
+    }
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to decrease availability', details: error.message });
+  }
+};
+
+exports.increaseAvailability = async (req, res) => {
+  const { id } = req.params;
+  const { date, quantity = 1 } = req.body;
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Missing date' });
+  }
+  try {
+    await Flight.increaseAvailability(id, date, quantity);
+    res.json({ status: 'success', message: 'Availability increased' });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to increase availability', details: error.message });
+  }
+};
+
+exports.listAllFlights = async (req, res) => {
+  try {
+    const result = await Flight.listAll(req.query);
+    res.json({ status: 'success', ...result });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to retrieve flights', details: error.message });
+  }
+};
+
+exports.filterFlights = async (req, res) => {
+  try {
+    const result = await Flight.filter(req.query);
+    res.json({ status: 'success', ...result });
+  } catch (error) {
+    console.error('Error in filterFlights controller:', error);
+    res.status(500).json({ status: 'error', message: 'Filter failed', details: error.message });
+  }
+};
+
+exports.getFlightDetails = async (req, res) => {
+  try {
+    const flight = await Flight.getById(req.params.id);
+    if (!flight) {
+      return res.status(404).json({ status: 'error', message: 'Flight not found' });
+    }
     res.json({ status: 'success', data: flight });
-  });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to get flight details', details: error.message });
+  }
 };
 
-exports.getAvailability = (req, res) => {
-  const id = req.params.id;
-  const date = req.query.date;
-  if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  Flight.getAvailability(id, date, (err, availability) => {
-    if (!availability) return res.status(404).json({ status: 'error', message: 'No availability found' });
-    res.json({ status: 'success', data: availability });
-  });
-};
-
-exports.getPricing = (req, res) => {
-  const id = req.params.id;
-  const { date, seatClass } = req.query;
-  if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  Flight.getPricing(id, date, seatClass, (err, pricing) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Pricing query failed', details: err.message });
-    if (!pricing || (Array.isArray(pricing) && pricing.length === 0)) return res.status(404).json({ status: 'error', message: 'No pricing found' });
-    const result = Array.isArray(pricing) ? pricing : [pricing];
-    const mapped = result.map(row => ({
-      price: row.price,
-      currency: row.currency || 'IDR',
-      date: row.travel_date || row.date || null,
-      seat_class: row.seat_class || row.class_type || row.flight_class || null
-    }));
-    res.json({ status: 'success', data: mapped });
-  });
+exports.getDailyStatus = async (req, res) => {
+  const { id } = req.params;
+  const { date } = req.query;
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Date query parameter is required' });
+  }
+  try {
+    const dailyStatus = await Flight.getDailyStatusById(id, date);
+    if (!dailyStatus || dailyStatus.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'No daily status found for the given flight and date' });
+    }
+    res.json({ status: 'success', data: dailyStatus });
+  } catch (error) {
+    res.status(500).json({ status: 'error', message: 'Failed to get daily status', details: error.message });
+  }
 };

@@ -17,11 +17,10 @@ router.get('/filter', hotelController.filterHotels);
 // Get hotel details
 router.get('/:id', hotelController.getHotelDetails);
 
-// Get availability for a hotel (requires check_in param)
-router.get('/:id/availability', hotelController.getAvailability);
 
-// Get pricing for a hotel (requires check_in param)
-router.get('/:id/pricing', hotelController.getPricing);
+
+// Get combined daily status (availability and pricing) for a hotel (requires date query param)
+router.get('/:id/daily-status', hotelController.getHotelDailyStatus);
 
 // Decrease room availability (booking)
 router.post('/:id/availability/decrease', hotelController.decreaseAvailability);

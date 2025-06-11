@@ -12,17 +12,11 @@ router.put('/:id', flightController.updateFlight);
 // Filter flights with multiple criteria
 router.get('/filter', flightController.filterFlights);
 
-// Search flights (basic search with origin/destination/date)
-router.get('/search', flightController.searchFlights);
-
 // Get flight details
 router.get('/:id', flightController.getFlightDetails);
 
-// Get availability for a flight (requires date param)
-router.get('/:id/availability', flightController.getAvailability);
-
-// Get pricing for a flight (requires date param)
-router.get('/:id/pricing', flightController.getPricing);
+// Get daily status (availability and pricing) for a flight
+router.get('/:id/daily-status', flightController.getDailyStatus);
 
 // Decrease flight seat availability (booking)
 router.post('/:id/availability/decrease', flightController.decreaseAvailability);

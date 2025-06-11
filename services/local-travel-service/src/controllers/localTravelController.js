@@ -57,7 +57,7 @@ exports.filterLocalTravel = (req, res) => {
   const { 
     origin_city, destination_city, origin_province, destination_province,
     origin_kabupaten, destination_kabupaten, type, operator_name, provider,
-    route, min_capacity, max_capacity, class_type,
+    route, min_capacity, max_capacity,
     has_ac, has_wifi, min_price, max_price, sort_by, sort_order,
     page, limit
   } = req.query;
@@ -71,7 +71,6 @@ exports.filterLocalTravel = (req, res) => {
     destination_province,
     origin_kabupaten,
     destination_kabupaten,
-    class_type,
     
     // Original fields
     type,
@@ -114,21 +113,21 @@ exports.getLocalTravelDetails = (req, res) => {
   });
 };
 
-exports.getAvailability = (req, res) => {
+exports.getDailyStatus = (req, res) => {
   const id = req.params.id;
   const { date } = req.query;
-  if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  LocalTravel.getAvailability(id, date, (err, avail) => {
-    res.json({ status: 'success', data: avail ? avail.available_units : 0 });
-  });
-};
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
+  }
 
-exports.getPricing = (req, res) => {
-  const id = req.params.id;
-  const { date } = req.query;
-  if (!date) return res.status(400).json({ status: 'error', message: 'Missing date parameter' });
-  LocalTravel.getPricing(id, date, (err, pricing) => {
-    res.json({ status: 'success', data: pricing ? { price: pricing.price, currency: pricing.currency } : null });
+  LocalTravel.getDailyStatus(id, date, (err, status) => {
+    if (err) {
+      return res.status(500).json({ status: 'error', message: 'Failed to get daily status', details: err.message });
+    }
+    if (!status) {
+      return res.status(404).json({ status: 'error', message: 'No status found for this date' });
+    }
+    res.json({ status: 'success', data: status });
   });
 };
 

@@ -31,11 +31,11 @@ exports.updateHotel = (req, res) => {
 // Decrease room availability (booking)
 exports.decreaseAvailability = (req, res) => {
   const hotelId = req.params.id;
-  const { room_type_id, date, quantity = 1 } = req.body;
-  if (!room_type_id || !date) {
-    return res.status(400).json({ status: 'error', message: 'Missing room_type_id or date' });
+  const { room_type_name, date, quantity = 1 } = req.body;
+  if (!room_type_name || !date) {
+    return res.status(400).json({ status: 'error', message: 'Missing room_type_name or date' });
   }
-  Hotel.decreaseAvailability(room_type_id, date, quantity, (err, result) => {
+  Hotel.decreaseAvailability(hotelId, room_type_name, date, quantity, (err, result) => {
     if (err) {
       return res.status(500).json({ status: 'error', message: 'Failed to decrease availability', details: err.message });
     }
@@ -46,11 +46,11 @@ exports.decreaseAvailability = (req, res) => {
 // Increase room availability (cancellation)
 exports.increaseAvailability = (req, res) => {
   const hotelId = req.params.id;
-  const { room_type_id, date, quantity = 1 } = req.body;
-  if (!room_type_id || !date) {
-    return res.status(400).json({ status: 'error', message: 'Missing room_type_id or date' });
+  const { room_type_name, date, quantity = 1 } = req.body;
+  if (!room_type_name || !date) {
+    return res.status(400).json({ status: 'error', message: 'Missing room_type_name or date' });
   }
-  Hotel.increaseAvailability(room_type_id, date, quantity, (err, result) => {
+  Hotel.increaseAvailability(hotelId, room_type_name, date, quantity, (err, result) => {
     if (err) {
       return res.status(500).json({ status: 'error', message: 'Failed to increase availability', details: err.message });
     }
@@ -85,35 +85,42 @@ exports.listAllHotels = (req, res) => {
 };
 
 exports.filterHotels = (req, res) => {
+  // Extract all potential filter parameters from the query string.
   const { 
-    name, city, province, property_type, min_star_rating, max_star_rating,
-    min_price, max_price, has_breakfast, has_wifi, room_size_min,
+    // Hotel specific
+    name, city, province, stars, property_type, facilities,
+    // DailyStatus specific
+    date, room_type_name, min_price, max_price,
+    // Control parameters
     sort_by, sort_order, page, limit
   } = req.query;
   
-  // Convert string parameters to appropriate types
+  // Build the params object for the model, converting types where necessary.
   const params = {
     name,
     city, 
     province, 
+    stars: stars ? parseInt(stars, 10) : undefined,
     property_type,
-    min_star_rating: min_star_rating ? parseFloat(min_star_rating) : undefined,
-    max_star_rating: max_star_rating ? parseFloat(max_star_rating) : undefined,
+    facilities,
+    date, // Pass date directly, the model handles the logic
+    room_type_name,
     min_price: min_price ? parseFloat(min_price) : undefined,
     max_price: max_price ? parseFloat(max_price) : undefined,
-    has_breakfast: has_breakfast !== undefined ? has_breakfast === 'true' : undefined,
-    has_wifi: has_wifi !== undefined ? has_wifi === 'true' : undefined,
-    room_size_min: room_size_min ? parseFloat(room_size_min) : undefined,
     sort_by,
     sort_order,
-    page: page ? parseInt(page) : 1,
-    limit: limit ? parseInt(limit) : 10
+    page: page ? parseInt(page, 10) : 1,
+    limit: limit ? parseInt(limit, 10) : 10
   };
-  
+
+  // Call the newly refactored Hotel.filter method
   Hotel.filter(params, (err, result) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    if (err) {
+      console.error('Hotel filter failed:', err);
+      return res.status(500).json({ status: 'error', message: 'Filter failed', details: err.message });
+    }
     
-    // Return data and pagination metadata
+    // Return the paginated data from the model
     res.json({
       status: 'success',
       data: result.data,
@@ -130,49 +137,30 @@ exports.getHotelDetails = (req, res) => {
   });
 };
 
-exports.getAvailability = (req, res) => {
-  const id = req.params.id;
-  const { check_in } = req.query;
-  if (!check_in) return res.status(400).json({ status: 'error', message: 'Missing check_in parameter' });
-  Hotel.getRoomTypes(id, (err, roomTypes) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Failed to fetch room types' });
-    const results = [];
-    let pending = roomTypes.length;
-    if (pending === 0) return res.json({ status: 'success', data: [] });
-    roomTypes.forEach(rt => {
-      Hotel.getAvailability(rt.id, check_in, (err, avail) => {
-        results.push({
-          roomType: rt.type,
-          availableRooms: avail ? avail.available_rooms : 0
-        });
-        if (--pending === 0) {
-          res.json({ status: 'success', data: results });
-        }
-      });
-    });
-  });
-};
+// Get combined daily status (availability and pricing) for a hotel on a specific date
+exports.getHotelDailyStatus = (req, res) => {
+  const hotelId = req.params.id;
+  const { date } = req.query;
 
-exports.getPricing = (req, res) => {
-  const id = req.params.id;
-  const { check_in } = req.query;
-  if (!check_in) return res.status(400).json({ status: 'error', message: 'Missing check_in parameter' });
-  Hotel.getRoomTypes(id, (err, roomTypes) => {
-    if (err) return res.status(500).json({ status: 'error', message: 'Failed to fetch room types' });
-    const results = [];
-    let pending = roomTypes.length;
-    if (pending === 0) return res.json({ status: 'success', data: [] });
-    roomTypes.forEach(rt => {
-      Hotel.getPricing(rt.id, check_in, (err, pricing) => {
-        results.push({
-          roomType: rt.type,
-          price: pricing ? pricing.price : null,
-          currency: pricing ? pricing.currency : null
-        });
-        if (--pending === 0) {
-          res.json({ status: 'success', data: results });
-        }
-      });
-    });
+  if (!date) {
+    return res.status(400).json({ status: 'error', message: 'Missing date query parameter' });
+  }
+
+  Hotel.getDailyStatus(hotelId, date, (err, results) => {
+    if (err) {
+      console.error(`Error in getHotelDailyStatus for hotelId ${hotelId}, date ${date}:`, err);
+      return res.status(500).json({ status: 'error', message: 'Failed to retrieve hotel daily status', details: err.message });
+    }
+
+    // The model now returns a combined result. We just need to format it for the client.
+    const formattedResults = results.map(item => ({
+      roomTypeName: item.room_type_name,
+      date: item.date, // Pass through the date from the model
+      availableRooms: item.available_rooms,
+      price: item.price,
+      currency: item.currency
+    }));
+
+    res.json({ status: 'success', data: formattedResults });
   });
 };

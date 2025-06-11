@@ -11,23 +11,26 @@
  * @param {number} params.limit - The number of items per page (default: 10)
  * @returns {Object} - The paginated SQL query and values for prepared statement
  */
-const paginateQuery = (sql, params = {}) => {
+const paginateQuery = (sql, params = {}, existingValues = []) => {
   const page = parseInt(params.page) || 1;
   const limit = parseInt(params.limit) || 10;
   const offset = (page - 1) * limit;
-  
+
   // Add pagination to the SQL query
   const paginatedSql = `${sql} LIMIT ? OFFSET ?`;
-  
+
+  // Combine existing values with pagination values
+  const allValues = [...existingValues, limit, offset];
+
   // Return the paginated SQL and values for the prepared statement
   return {
     sql: paginatedSql,
-    values: [limit, offset],
+    values: allValues,
     pagination: {
       page,
       limit,
-      offset
-    }
+      offset,
+    },
   };
 };
 

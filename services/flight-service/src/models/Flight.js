@@ -1,191 +1,163 @@
-const db = require('../config/db');
+const db = require('../config/db').promise(); // Use promise-based connection
 const { paginateQuery, paginatedResponse } = require('../../../utils/pagination');
 
 const Flight = {
-  // Create a new Flight entry
-  create: (data, callback) => {
-    const {
-      airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description
-    } = data;
-    const sql = `INSERT INTO Flights (airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-    const values = [airline, flight_number, origin_city, destination_city, departure_time, arrival_time, aircraft_model, seat_capacity, description];
-    db.query(sql, values, callback);
-  },
-  // Update an existing Flight entry
-  update: (id, data, callback) => {
-    const fields = [];
-    const values = [];
-    [
-      'airline', 'flight_number', 'origin_city', 'destination_city', 'departure_time', 'arrival_time', 'aircraft_model', 'seat_capacity', 'description'
-    ].forEach(field => {
-      if (data[field] !== undefined) {
-        fields.push(`${field} = ?`);
-        values.push(data[field]);
-      }
-    });
-    if (fields.length === 0) return callback(null, { affectedRows: 0 });
-    const sql = `UPDATE Flights SET ${fields.join(', ')} WHERE id = ?`;
-    values.push(id);
-    db.query(sql, values, callback);
-  },
+  // NOTE: create and update methods are placeholders and not used by the current API,
+  // as flight data is assumed to be managed by a separate system.
 
   // Decrease available seats for a flight and date
-  decreaseAvailability: (flightId, date, quantity, callback) => {
-    db.query(
-      'UPDATE FlightAvailability SET available_seats = available_seats - ? WHERE flight_id = ? AND travel_date = ? AND available_seats >= ?;',
-      [quantity, flightId, date, quantity],
-      (err, result) => {
-        if (err) return callback(err);
-        callback(null, result);
-      }
-    );
-  },
-  // Increase available seats for a flight and date
-  increaseAvailability: (flightId, date, quantity, callback) => {
-    db.query(
-      'UPDATE FlightAvailability SET available_seats = available_seats + ? WHERE flight_id = ? AND travel_date = ?;',
-      [quantity, flightId, date],
-      (err, result) => {
-        if (err) return callback(err);
-        callback(null, result);
-      }
-    );
+  async decreaseAvailability(flightId, date, quantity) {
+    const sql = 'UPDATE FlightDailyStatus SET available_seats = available_seats - ? WHERE flight_id = ? AND date = ? AND available_seats >= ?';
+    const [result] = await db.query(sql, [quantity, flightId, date, quantity]);
+    return result.affectedRows > 0;
   },
 
-  search: (params, callback) => {
-    const { origin_city, destination_city, date } = params;
-    let sql = `SELECT * FROM Flights WHERE 1=1`;
-    const values = [];
-    if (origin_city) { sql += ' AND origin_city = ?'; values.push(origin_city); }
-    if (destination_city) { sql += ' AND destination_city = ?'; values.push(destination_city); }
-    if (date) { sql += ' AND DATE(departure_time) = ?'; values.push(date); }
-    db.query(sql, values, (err, results) => callback(err, results));
+  // Increase available seats for a flight and date
+  async increaseAvailability(flightId, date, quantity) {
+    const sql = 'UPDATE FlightDailyStatus SET available_seats = available_seats + ? WHERE flight_id = ? AND date = ?';
+    const [result] = await db.query(sql, [quantity, flightId, date]);
+    return result.affectedRows > 0;
+  },
+
+  async listAll(params) {
+    const baseSql = `SELECT * FROM Flights`;
+
+    const [countResults] = await db.query('SELECT COUNT(*) as total FROM Flights');
+    const totalItems = countResults[0].total;
+
+    if (params.page || params.limit) {
+      const { sql, values, pagination } = paginateQuery(baseSql, params);
+      const [results] = await db.query(sql, values);
+      return paginatedResponse(results, pagination, totalItems);
+    } else {
+      const sql = `${baseSql} ORDER BY id ASC`;
+      const [results] = await db.query(sql);
+      return { data: results, pagination: null };
+    }
   },
   
-  listAll: (params, callback) => {
-    // Count total flights for pagination info
-    db.query('SELECT COUNT(*) as total FROM Flights', [], (err, countResult) => {
-      if (err) return callback(err);
-      
-      const totalItems = countResult[0].total;
-      const baseSql = `SELECT * FROM Flights ORDER BY departure_time`;
-      
-      // Apply pagination if page and limit parameters exist
-      if (params.page || params.limit) {
-        const { sql, values, pagination } = paginateQuery(baseSql, params);
-        
-        db.query(sql, values, (err, results) => {
-          if (err) return callback(err);
-          
-          const paginatedData = paginatedResponse(results, pagination, totalItems);
-          callback(null, paginatedData);
-        });
-      } else {
-        // No pagination requested, return all results
-        db.query(baseSql, [], (err, results) => {
-          callback(err, { data: results, pagination: null });
-        });
-      }
-    });
-  },
-  
-  filter: (params, callback) => {
-    const { 
-      origin_city, destination_city,
-      airline_code, airline_name, flight_class, departure_date,
-      min_price, max_price, sort_by, sort_order, page, limit
+  async filter(params) {
+    const {
+      origin_city, destination_city, airline_code, airline_name,
+      departure_date, min_price, max_price,
+      sort_by, sort_order, page, limit
     } = params;
-    
-    let sql;
+
     let values = [];
-    
-    if (departure_date) {
-      // Join FlightAvailability for seats_available if filtering by date
-      sql = `
-        SELECT f.*, fp.price, fp.currency, fa.available_seats AS seats_available
-        FROM Flights f
-        LEFT JOIN FlightPricing fp ON f.id = fp.flight_id
-        LEFT JOIN FlightAvailability fa ON f.id = fa.flight_id AND fa.travel_date = ?
-        WHERE 1=1
-      `;
-      values.push(departure_date);
-    } else {
-      // Default: no join with FlightAvailability
-      sql = `
-        SELECT f.*, fp.price, fp.currency
-        FROM Flights f
-        LEFT JOIN FlightPricing fp ON f.id = fp.flight_id
-        WHERE 1=1
-      `;
-    }
-    
-    // Filtering
-    if (origin_city) { sql += ' AND f.origin = ?'; values.push(origin_city); }
-    if (destination_city) { sql += ' AND f.destination = ?'; values.push(destination_city); }
-    if (airline_code) { sql += ' AND f.airline_code = ?'; values.push(airline_code); }
-    if (airline_name) { sql += ' AND f.airline_name LIKE ?'; values.push(`%${airline_name}%`); }
-    if (flight_class) { sql += ' AND f.flight_class = ?'; values.push(flight_class); }
-    if (departure_date) { /* already handled above for join */ }
-    if (min_price) { sql += ' AND fp.price >= ?'; values.push(min_price); }
-    if (max_price) { sql += ' AND fp.price <= ?'; values.push(max_price); }
-    
-    // Add sorting
-    if (sort_by) {
-      const validSortColumns = ['departure_time', 'arrival_time', 'price', 'airline_name'];
-      const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'departure_time';
-      const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-      
-      if (sortColumn === 'price') {
-        sql += ` ORDER BY fp.${sortColumn} ${order}`;
-      } else {
-        sql += ` ORDER BY ${sortColumn} ${order}`;
+    let whereConditions = ['1=1'];
+
+    // Explicitly select all required fields to avoid nulls and match DB schema.
+    let selectClause = `SELECT DISTINCT 
+      f.id, f.airline_name, f.flight_number, f.origin_name, f.destination_name, 
+      f.departure_time, f.arrival_time, f.origin_code, -- Corrected from f.origin_airport_iata
+      f.destination_code, -- Corrected from f.destination_airport_iata
+      f.airline_code, f.created_at, f.updated_at
+      -- Removed: f.flight_status, f.aircraft_model, f.seat_capacity, f.description (not in DB schema)
+    `;
+    let fromClause = `FROM Flights f`;
+
+    // If filtering by date, price, or sorting by price, a JOIN with FlightDailyStatus is necessary.
+    const needsDailyStatusJoin = departure_date || min_price || max_price || sort_by === 'price';
+    if (needsDailyStatusJoin) {
+      fromClause += ` JOIN FlightDailyStatus fds ON f.id = fds.flight_id`;
+      if (departure_date) {
+        whereConditions.push('fds.date = ?');
+        values.push(departure_date);
       }
-    } else {
-      sql += ' ORDER BY f.departure_time ASC';
+      if (min_price) {
+        whereConditions.push('fds.price >= ?');
+        values.push(min_price);
+      }
+      if (max_price) {
+        whereConditions.push('fds.price <= ?');
+        values.push(max_price);
+      }
     }
-    
-    // Count total flights matching the filter for pagination info
-    const countSql = sql.replace('SELECT f.*, fp.price, fp.currency', 'SELECT COUNT(*) as total');
-    db.query(countSql, values, (err, countResult) => {
-      if (err) return callback(err);
-      
-      const totalItems = countResult[0].total;
-      
-      // Apply pagination if page and limit parameters exist
+
+    // Add filters for the Flights table
+    if (origin_city) { whereConditions.push('f.origin_city LIKE ?'); values.push(`%${origin_city}%`); }
+    if (destination_city) { whereConditions.push('f.destination_city LIKE ?'); values.push(`%${destination_city}%`); }
+    if (airline_code) { whereConditions.push('f.airline_code = ?'); values.push(airline_code); }
+    if (airline_name) { whereConditions.push('f.airline_name LIKE ?'); values.push(`%${airline_name}%`); }
+
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`;
+
+    const countSql = `SELECT COUNT(DISTINCT f.id) as items_count ${fromClause} ${whereClause}`;
+
+    try {
+      // 1. Get total count for pagination
+      const [countResult] = await db.query(countSql, values);
+      // Ensure countResult[0] exists and has the items_count property
+      const totalItems = (countResult && countResult[0] && countResult[0].items_count !== undefined) ? countResult[0].items_count : 0;
+
+      // 2. Build the main query with sorting
+      let sql = `${selectClause} ${fromClause} ${whereClause}`;
+      let orderByClause = ' ORDER BY f.departure_time ASC'; // Default sort
+      if (sort_by) {
+        const validSortColumns = {
+          'departure_time': 'f.departure_time',
+          'arrival_time': 'f.arrival_time',
+          'price': 'fds.price',
+          'airline_name': 'f.airline_name'
+        };
+
+        if (validSortColumns[sort_by]) {
+          if (sort_by === 'price' && !needsDailyStatusJoin) {
+            // Cannot sort by price without a date filter, so we ignore it.
+          } else {
+            const sortColumnDb = validSortColumns[sort_by];
+            const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+            orderByClause = ` ORDER BY ${sortColumnDb} ${order}`;
+          }
+        }
+      }
+      sql += orderByClause;
+
+      // 3. Apply pagination and execute the final query
       if (page || limit) {
         const { sql: paginatedSql, values: paginationValues, pagination } = paginateQuery(sql, { page, limit });
-        
-        // Combine filter values with pagination values
         const combinedValues = [...values, ...paginationValues];
-        
-        db.query(paginatedSql, combinedValues, (err, results) => {
-          if (err) return callback(err);
-          
-          const paginatedData = paginatedResponse(results, pagination, totalItems);
-          callback(null, paginatedData);
-        });
+        const [results] = await db.query(paginatedSql, combinedValues);
+        return paginatedResponse(results, pagination, totalItems);
       } else {
-        // No pagination requested, return all results
-        db.query(sql, values, (err, results) => {
-          callback(err, { data: results, pagination: null });
-        });
+        const [results] = await db.query(sql, values);
+        return { data: results, pagination: null };
       }
-    });
-  },
-  getById: (id, callback) => {
-    db.query('SELECT * FROM Flights WHERE id = ?', [id], (err, results) => callback(err, results[0]));
-  },
-  getAvailability: (flightId, date, callback) => {
-    db.query('SELECT * FROM FlightAvailability WHERE flight_id = ? AND travel_date = ?', [flightId, date], (err, results) => callback(err, results[0]));
-  },
-  getPricing: (flightId, date, seatClass, callback) => {
-    let sql = 'SELECT * FROM FlightPricing WHERE flight_id = ? AND travel_date = ?';
-    const params = [flightId, date];
-    if (seatClass) {
-      sql += ' AND (seat_class = ? OR class_type = ? OR flight_class = ?)';
-      params.push(seatClass, seatClass, seatClass);
+    } catch (err) {
+      console.error('Error filtering flights:', err);
+      throw err;
     }
-    db.query(sql, params, (err, results) => callback(err, results));
+  },
+
+  getById: async (id) => {
+    const sql = `
+      SELECT 
+        id, airline_name, flight_number, origin_name, destination_name, 
+        departure_time, arrival_time, origin_code, -- Corrected from origin_airport_iata
+        destination_code, -- Corrected from destination_airport_iata
+        airline_code, created_at, updated_at
+        -- Removed: flight_status, aircraft_model, seat_capacity, description (not in DB schema)
+      FROM Flights 
+      WHERE id = ?
+    `;
+    try {
+      const [results] = await db.query(sql, [id]);
+      return results.length > 0 ? results[0] : null;
+    } catch (err) {
+      console.error('Error fetching flight by ID:', err);
+      throw err;
+    }
+  },
+
+  getDailyStatusById: async (flightId, date) => {
+    const sql = 'SELECT * FROM FlightDailyStatus WHERE flight_id = ? AND date = ?';
+    try {
+      const [results] = await db.query(sql, [flightId, date]);
+      return results.length > 0 ? results[0] : null;
+    } catch (err) {
+      console.error('Error fetching flight daily status:', err);
+      throw err; // Re-throw the error to be caught by the controller
+    }
   }
 };
 

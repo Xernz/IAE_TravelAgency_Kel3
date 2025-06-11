@@ -1,7 +1,11 @@
 -- Local Travel Service Database Schema (Consumer Only)
 USE travel_local_travel_db;
 
+DROP TABLE IF EXISTS LocalTravelPricing;
+DROP TABLE IF EXISTS LocalTravelAvailability;
+DROP TABLE IF EXISTS LocalTravelDailyStatus;
 DROP TABLE IF EXISTS LocalTravel;
+
 CREATE TABLE IF NOT EXISTS LocalTravel (
     id INT AUTO_INCREMENT PRIMARY KEY,
     provider VARCHAR(64) NOT NULL,
@@ -24,25 +28,17 @@ CREATE TABLE IF NOT EXISTS LocalTravel (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-DROP TABLE IF EXISTS LocalTravelAvailability;
-CREATE TABLE IF NOT EXISTS LocalTravelAvailability (
+CREATE TABLE IF NOT EXISTS LocalTravelDailyStatus (
     id INT AUTO_INCREMENT PRIMARY KEY,
     local_travel_id INT NOT NULL,
     date DATE NOT NULL,
     available_units INT NOT NULL,
-    FOREIGN KEY (local_travel_id) REFERENCES LocalTravel(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
--- Note: available_units is updated via /availability/decrease and /availability/increase endpoints for booking/cancellation.
-
-DROP TABLE IF EXISTS LocalTravelPricing;
-CREATE TABLE IF NOT EXISTS LocalTravelPricing (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    local_travel_id INT NOT NULL,
-    date DATE NOT NULL,
     price DECIMAL(12,2) NOT NULL,
-    currency VARCHAR(3) DEFAULT 'IDR', -- Indonesian Rupiah as default
-    class_type VARCHAR(32), -- e.g., 'Ekonomi', 'Eksekutif', 'VIP'
-    FOREIGN KEY (local_travel_id) REFERENCES LocalTravel(id)
+    currency VARCHAR(3) DEFAULT 'IDR',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (local_travel_id) REFERENCES LocalTravel(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_localtravel_date (local_travel_id, date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Sample Data
@@ -58,29 +54,20 @@ INSERT INTO LocalTravel (provider, operator_name, type, origin_city, destination
 ('Xtrans', 'PT. Batavia Prosperindo Trans', 'Travel', 'Jakarta', 'Bandung', 'Jakarta Selatan', 'Bandung', 'DKI Jakarta', 'Jawa Barat', 'Jakarta (Pondok Indah) - Bandung (Pasteur)', 8, 'AC, Kursi Nyaman, WiFi, USB Charging', '07:00', '11:00', 'Toyota Innova', 'Layanan travel premium Jakarta-Bandung'),
 ('Pahala Kencana', 'PT. Pahala Kencana', 'Inter-City Bus', 'Jakarta', 'Surabaya', 'Jakarta Timur', 'Surabaya', 'DKI Jakarta', 'Jawa Timur', 'Jakarta - Surabaya via Pantura', 40, 'AC, Toilet, Selimut, Bantal, Makan', '06:00', '10:00', 'Toyota Innova', 'Bus AKAP kelas eksekutif');
 
-INSERT INTO LocalTravelAvailability (local_travel_id, date, available_units) VALUES
-(1, '2025-06-10', 25),
-(2, '2025-06-10', 10),
-(3, '2025-06-10', 5),
-(4, '2025-06-10', 8),
-(5, '2025-06-10', 50),
-(6, '2025-06-10', 30),
-(7, '2025-06-10', 15),
-(8, '2025-06-10', 12),
-(9, '2025-06-10', 6),
-(10, '2025-06-10', 3);
+-- Sample Data for LocalTravelDailyStatus
+-- Combining data from former LocalTravelAvailability and LocalTravelPricing
+-- For items with multiple class_types, the 'Ekonomi' or 'Reguler' price is used, or the only price if no class was specified.
+INSERT INTO LocalTravelDailyStatus (local_travel_id, date, available_units, price, currency) VALUES
+(1, '2025-06-10', 25, 100000.00, 'IDR'), -- Blue Bird
+(2, '2025-06-10', 10, 3500.00, 'IDR'),   -- TransJakarta
+(3, '2025-06-10', 5, 120000.00, 'IDR'),  -- Sinar Jaya (Ekonomi price)
+(4, '2025-06-10', 8, 75000.00, 'IDR'),   -- Damri
+(5, '2025-06-10', 50, 15000.00, 'IDR'),  -- Gojek
+(6, '2025-06-10', 30, 180000.00, 'IDR'), -- Grab
+(7, '2025-06-10', 15, 5000.00, 'IDR'),    -- Kopaja
+(8, '2025-06-10', 12, 500000.00, 'IDR'), -- Trac (Ekonomi price)
+(9, '2025-06-10', 6, 135000.00, 'IDR'),  -- Xtrans
+(10, '2025-06-10', 3, 250000.00, 'IDR'); -- Pahala Kencana (Ekonomi price)
 
-INSERT INTO LocalTravelPricing (local_travel_id, date, price, currency, class_type) VALUES
-(1, '2025-06-10', 100000.00, 'IDR', NULL), -- Blue Bird base fare + few km
-(2, '2025-06-10', 3500.00, 'IDR', 'Reguler'),   -- TransJakarta single trip
-(3, '2025-06-10', 120000.00, 'IDR', 'Ekonomi'), -- Sinar Jaya Jakarta-Bandung Ekonomi
-(3, '2025-06-10', 150000.00, 'IDR', 'Eksekutif'), -- Sinar Jaya Jakarta-Bandung Eksekutif
-(4, '2025-06-10', 75000.00, 'IDR', 'Reguler'),  -- Damri airport shuttle
-(5, '2025-06-10', 15000.00, 'IDR', 'Reguler'),  -- Gojek short trip
-(6, '2025-06-10', 180000.00, 'IDR', 'Reguler'),  -- Grab travel Yogya-Semarang
-(7, '2025-06-10', 5000.00, 'IDR', 'Reguler'),   -- Kopaja single trip
-(8, '2025-06-10', 500000.00, 'IDR', 'Ekonomi'), -- Trac car rental economy class
-(8, '2025-06-10', 800000.00, 'IDR', 'Eksekutif'), -- Trac car rental executive class
-(9, '2025-06-10', 135000.00, 'IDR', 'Reguler'), -- Xtrans Jakarta-Bandung
-(10, '2025-06-10', 350000.00, 'IDR', 'Eksekutif'), -- Pahala Kencana Jakarta-Surabaya
-(10, '2025-06-10', 250000.00, 'IDR', 'Ekonomi'); -- Pahala Kencana Jakarta-Surabaya
+-- Note: Data migration from old tables to LocalTravelDailyStatus would be required in a real scenario.
+-- The sample data above is illustrative and replaces the old sample data.

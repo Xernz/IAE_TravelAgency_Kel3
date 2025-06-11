@@ -18,11 +18,8 @@ router.get('/search', localTravelController.searchLocalTravel);
 // Get local travel details
 router.get('/:id', localTravelController.getLocalTravelDetails);
 
-// Get availability for a local travel option (requires date param)
-router.get('/:id/availability', localTravelController.getAvailability);
-
-// Get pricing for a local travel option (requires date param)
-router.get('/:id/pricing', localTravelController.getPricing);
+// Get daily status (availability and pricing) for a local travel option
+router.get('/:id/daily-status', localTravelController.getDailyStatus);
 
 // Decrease local travel unit availability (booking)
 router.post('/:id/availability/decrease', localTravelController.decreaseAvailability);
