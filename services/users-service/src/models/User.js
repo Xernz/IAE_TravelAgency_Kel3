@@ -1,158 +1,115 @@
+const util = require('util');
 const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
+// Promisify db.query for async/await support
+const query = util.promisify(db.query).bind(db);
+
 const User = {
-  getById: (id, callback) => {
-    db.query('SELECT * FROM Users WHERE id = ?', [id], (err, results) => {
-      callback(err, results[0]);
-    });
+  async getById(id) {
+    const results = await query('SELECT * FROM Users WHERE id = ?', [id]);
+    return results[0];
   },
-  getByEmail: (email, callback) => {
-    db.query('SELECT * FROM Users WHERE email = ?', [email], (err, results) => {
-      callback(err, results[0]);
-    });
+
+  async getByEmail(email) {
+    const results = await query('SELECT * FROM Users WHERE email = ?', [email]);
+    return results[0];
   },
   
-  listAll: (params, callback) => {
-    // Exclude password for security
+  async listAll(params) {
     const baseSql = `SELECT id, email, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, created_at FROM Users ORDER BY full_name`;
-    
-    // Count total items for pagination metadata
     const countSql = `SELECT COUNT(*) as total FROM Users`;
     
-    // Apply pagination
+    const countResults = await query(countSql);
+    const totalItems = countResults[0].total;
+    
     const { sql, values, pagination } = paginateQuery(baseSql, params);
     
-    // Execute count query first
-    db.query(countSql, [], (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
-      
-      const totalItems = countResults[0].total;
-      
-      // Then execute the paginated query
-      db.query(sql, values, (err, results) => {
-        if (err) return callback(err, null);
-        
-        // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
-        callback(null, response);
-      });
-    });
+    const results = await query(sql, values);
+    
+    return paginatedResponse(results, pagination, totalItems);
   },
   
-  filter: (params, callback) => {
+  async filter(params) {
     const { 
       email, full_name, phone_number, min_age, max_age, start_date, end_date, 
       kabupaten_kota, province, postal_code, sort_by, sort_order, page, limit
     } = params;
-    
-    // Exclude password for security
-    let baseSql = `
-      SELECT id, email, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, created_at 
-      FROM Users
-      WHERE 1=1
-    `;
-    
-    const baseValues = [];
-    
-    if (email) { baseSql += ' AND email LIKE ?'; baseValues.push(`%${email}%`); }
-    if (full_name) { baseSql += ' AND full_name LIKE ?'; baseValues.push(`%${full_name}%`); }
-    if (phone_number) { baseSql += ' AND phone_number LIKE ?'; baseValues.push(`%${phone_number}%`); }
-    
-    // Indonesian-specific filters
-    if (kabupaten_kota) { baseSql += ' AND kabupaten_kota LIKE ?'; baseValues.push(`%${kabupaten_kota}%`); }
-    if (province) { baseSql += ' AND province LIKE ?'; baseValues.push(`%${province}%`); }
-    if (postal_code) { baseSql += ' AND postal_code LIKE ?'; baseValues.push(`%${postal_code}%`); }
-    
-    // Age filtering using birth_date
-    if (min_age) { 
-      baseSql += ' AND birth_date <= DATE_SUB(CURDATE(), INTERVAL ? YEAR)';
-      baseValues.push(min_age);
-    }
-    if (max_age) { 
-      baseSql += ' AND birth_date >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)';
-      baseValues.push(max_age);
-    }
-    
-    if (start_date) { baseSql += ' AND DATE(created_at) >= ?'; baseValues.push(start_date); }
-    if (end_date) { baseSql += ' AND DATE(created_at) <= ?'; baseValues.push(end_date); }
-    
-    // Add sorting
+
+    let whereClauses = [];
+    let values = [];
+
+    if (email) { whereClauses.push('email LIKE ?'); values.push(`%${email}%`); }
+    if (full_name) { whereClauses.push('full_name LIKE ?'); values.push(`%${full_name}%`); }
+    if (phone_number) { whereClauses.push('phone_number LIKE ?'); values.push(`%${phone_number}%`); }
+    if (kabupaten_kota) { whereClauses.push('kabupaten_kota LIKE ?'); values.push(`%${kabupaten_kota}%`); }
+    if (province) { whereClauses.push('province LIKE ?'); values.push(`%${province}%`); }
+    if (postal_code) { whereClauses.push('postal_code LIKE ?'); values.push(`%${postal_code}%`); }
+    if (min_age) { whereClauses.push('birth_date <= DATE_SUB(CURDATE(), INTERVAL ? YEAR)'); values.push(min_age); }
+    if (max_age) { whereClauses.push('birth_date >= DATE_SUB(CURDATE(), INTERVAL ? YEAR)'); values.push(max_age); }
+    if (start_date) { whereClauses.push('DATE(created_at) >= ?'); values.push(start_date); }
+    if (end_date) { whereClauses.push('DATE(created_at) <= ?'); values.push(end_date); }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    // Count total items with the same filters
+    const countSql = `SELECT COUNT(*) as total FROM Users ${whereSql}`;
+    const countResults = await query(countSql, values);
+    const totalItems = countResults[0].total;
+
+    // Prepare main query with sorting
+    let orderBySql = 'ORDER BY full_name ASC';
     if (sort_by) {
       const validSortColumns = ['full_name', 'email', 'created_at', 'birth_date', 'province', 'kabupaten_kota'];
       const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'full_name';
       const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-      
-      baseSql += ` ORDER BY ${sortColumn} ${order}`;
-    } else {
-      baseSql += ' ORDER BY full_name ASC';
+      orderBySql = `ORDER BY ${sortColumn} ${order}`;
     }
+
+    const baseSql = `
+      SELECT id, email, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, created_at 
+      FROM Users
+      ${whereSql}
+      ${orderBySql}
+    `;
+
+    // Apply pagination to the final query
+    const { sql: paginatedSql, values: paginatedValues, pagination } = paginateQuery(baseSql, { page, limit }, values);
+
+    const results = await query(paginatedSql, paginatedValues);
     
-    // Count total items for pagination metadata
-    const countSql = `SELECT COUNT(*) as total FROM Users WHERE 1=1`;
-    let countValues = [];
-    
-    // Add the same WHERE conditions to count query
-    baseValues.forEach((value, index) => {
-      // Extract the condition part from baseSql for each parameter
-      const conditionMatch = baseSql.match(new RegExp(`AND\s+([^\s]+)\s+(?:LIKE|=|<=|>=|<|>)\s+\?`, 'g'));
-      if (conditionMatch && conditionMatch[index]) {
-        countSql += ` ${conditionMatch[index]}`;
-        countValues.push(value);
-      }
-    });
-    
-    // Apply pagination
-    const { sql, values, pagination } = paginateQuery(baseSql, { page, limit }, baseValues);
-    
-    // Execute count query first
-    db.query(countSql, countValues, (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
-      
-      const totalItems = countResults[0].total;
-      
-      // Then execute the paginated query
-      db.query(sql, values, (err, results) => {
-        if (err) return callback(err, null);
-        
-        // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
-        callback(null, response);
-      });
-    });
+    return paginatedResponse(results, pagination, totalItems);
   },
-  create: (user, callback) => {
+
+  async create(user) {
     const { 
       email, password, full_name, phone_number, birth_date, no_nik,
       address, kelurahan, kecamatan, kabupaten_kota, province, postal_code 
     } = user;
     
-    db.query(
-      'INSERT INTO Users (email, password, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())',
-      [email, password, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code],
-      (err, results) => {
-        callback(err, results);
-      }
-    );
+    const sql = 'INSERT INTO Users (email, password, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())';
+    const values = [email, password, full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code];
+    
+    const results = await query(sql, values);
+    return results;
   },
-  update: (id, user, callback) => {
+
+  async update(id, user) {
     const { 
       full_name, phone_number, birth_date, no_nik,
       address, kelurahan, kecamatan, kabupaten_kota, province, postal_code 
     } = user;
     
-    db.query(
-      'UPDATE Users SET full_name=?, phone_number=?, birth_date=?, no_nik=?, address=?, kelurahan=?, kecamatan=?, kabupaten_kota=?, province=?, postal_code=? WHERE id=?',
-      [full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, id],
-      (err, results) => {
-        callback(err, results);
-      }
-    );
+    const sql = 'UPDATE Users SET full_name=?, phone_number=?, birth_date=?, no_nik=?, address=?, kelurahan=?, kecamatan=?, kabupaten_kota=?, province=?, postal_code=? WHERE id=?';
+    const values = [full_name, phone_number, birth_date, no_nik, address, kelurahan, kecamatan, kabupaten_kota, province, postal_code, id];
+
+    const results = await query(sql, values);
+    return results;
   },
-  delete: (id, callback) => {
-    db.query('DELETE FROM Users WHERE id=?', [id], (err, results) => {
-      callback(err, results);
-    });
+
+  async delete(id) {
+    const results = await query('DELETE FROM Users WHERE id=?', [id]);
+    return results;
   }
 };
 

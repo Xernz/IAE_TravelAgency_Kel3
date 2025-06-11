@@ -1,6 +1,7 @@
 -- Payment Service Database Schema (Consumer Only)
+DROP DATABASE IF EXISTS travel_payment_db;
+CREATE DATABASE travel_payment_db;
 USE travel_payment_db;
-
 CREATE TABLE IF NOT EXISTS Payments (
     id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT NOT NULL,

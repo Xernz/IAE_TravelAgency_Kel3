@@ -1,3 +1,5 @@
+require('dotenv').config();
+console.log('[API Gateway] JWT_SECRET:', process.env.JWT_SECRET);
 const express = require('express');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const cors = require('cors');
@@ -8,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 app.use(cors());
-// app.use(express.json()); // Removed to prevent body parsing before proxying
+app.use(express.json()); // Added to parse JSON request bodies
 app.use(morgan('dev'));
 
 // Proxy configuration for each microservice
@@ -32,8 +34,18 @@ app.get('/', (req, res) => {
 });
 
 // Start Apollo GraphQL Server and then listen
-startApolloServer().then((app) => {
-  app.listen(PORT, () => {
-    console.log(`API Gateway listening on port ${PORT}`);
+console.log('[API Gateway] Initializing Apollo Server...');
+startApolloServer(app) // Pass the main app instance
+  .then((initializedApp) => {
+    console.log('[API Gateway] Apollo Server initialized. returnedApp === app:', initializedApp === app);
+    console.log(`[API Gateway] Attempting to listen on port ${PORT}...`);
+    initializedApp.listen(PORT, () => {
+      console.log(`[API Gateway] Successfully listening on port ${PORT}`);
+      console.log(`[API Gateway] GraphQL endpoint available at http://localhost:${PORT}/graphql`);
+      console.log(`[API Gateway] Root endpoint available at http://localhost:${PORT}/`);
+    });
+  })
+  .catch(error => {
+    console.error('[API Gateway] Failed to start Apollo Server or listen:', error);
+    process.exit(1); // Exit if server fails to start
   });
-});

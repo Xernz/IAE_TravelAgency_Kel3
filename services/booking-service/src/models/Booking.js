@@ -1,64 +1,62 @@
+const util = require('util');
 const db = require('../config/db');
 const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
+const query = util.promisify(db.query).bind(db);
+
 const Booking = {
-  // Updated to select all relevant fields for GQL alignment
-  getById: (id, callback) => {
-    db.query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE id = ?', [id], (err, results) => callback(err, results[0]));
+  async getById(id) {
+    const results = await query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE id = ?', [id]);
+    return results[0];
   },
-  // Updated to select all relevant fields for GQL alignment
-  getUserBookings: (userId, callback) => {
-    db.query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE user_id = ?', [userId], (err, results) => callback(err, results));
+
+  async getUserBookings(userId) {
+    return query('SELECT id, user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at FROM Bookings WHERE user_id = ?', [userId]);
   },
-  // Expanded to support all fields; expects an object with all fields
-  create: (bookingData, callback) => {
-    // bookingData should be: { user_id, booking_code, total_amount, currency, payment_status, special_requests, status }
-    // updated_at is handled by DB trigger or set to NOW() if needed
+
+  async create(bookingData) {
+    // Generate a unique booking code
+    const booking_code = `BOOK-${Date.now()}`.slice(0, 20);
+
     const {
       user_id,
-      booking_code = null,
-      total_amount = null,
-      currency = null,
-      payment_status = null,
-      special_requests = null,
-      status = 'active'
+      type,
+      ref_id,
+      travel_date,
+      quantity,
+      unit_price,
+      details,
+      status,
+      total_amount,
+      currency,
+      payment_status,
+      special_requests
     } = bookingData;
-    db.query(
-      `INSERT INTO Bookings (user_id, booking_code, total_amount, currency, payment_status, special_requests, status, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
-      [user_id, booking_code, total_amount, currency, payment_status, special_requests, status],
-      (err, results) => callback(err, results)
-    );
+
+    const sql = `
+      INSERT INTO Bookings 
+      (booking_code, user_id, type, ref_id, travel_date, quantity, unit_price, details, status, total_amount, currency, payment_status, special_requests, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+    `;
+    const values = [booking_code, user_id, type, ref_id, travel_date, quantity, unit_price, details, status, total_amount, currency, payment_status, special_requests];
+    
+    return query(sql, values);
   },
   
-  listAll: (params, callback) => {
-    // Base query for getting all bookings
+  async listAll(params) {
     const baseSql = `SELECT * FROM Bookings ORDER BY created_at DESC`;
-    
-    // Count total items for pagination metadata
     const countSql = `SELECT COUNT(*) as total FROM Bookings`;
-    
-    // Apply pagination
+
+    const countResults = await query(countSql);
+    const totalItems = countResults[0].total;
+
     const { sql, values, pagination } = paginateQuery(baseSql, params);
-    
-    // Execute count query first
-    db.query(countSql, [], (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
-      
-      const totalItems = countResults[0].total;
-      
-      // Then execute the paginated query
-      db.query(sql, values, (err, results) => {
-        if (err) return callback(err, null);
-        
-        // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
-        callback(null, response);
-      });
-    });
+    const results = await query(sql, values);
+
+    return paginatedResponse(results, pagination, totalItems);
   },
   
-  filter: (params, callback) => {
+  async filter(params) {
     const { 
       user_id, booking_code, status, payment_status, item_type,
       min_total, max_total, start_date, end_date, sort_by, sort_order,
@@ -66,79 +64,87 @@ const Booking = {
       service_class, provider, travel_date_start, travel_date_end,
       page, limit 
     } = params;
-    
-    let baseSql = `
+
+    let whereClauses = [];
+    let values = [];
+    let joins = 'LEFT JOIN BookingItems bi ON b.id = bi.booking_id';
+
+    if (user_id) { whereClauses.push('b.user_id = ?'); values.push(user_id); }
+    if (booking_code) { whereClauses.push('b.booking_code LIKE ?'); values.push(`%${booking_code}%`); }
+    if (status) { whereClauses.push('b.status = ?'); values.push(status); }
+    if (payment_status) { whereClauses.push('b.payment_status = ?'); values.push(payment_status); }
+    if (item_type) { whereClauses.push('bi.type = ?'); values.push(item_type); }
+    if (min_total) { whereClauses.push('b.total_amount >= ?'); values.push(min_total); }
+    if (max_total) { whereClauses.push('b.total_amount <= ?'); values.push(max_total); }
+    if (start_date) { whereClauses.push('DATE(b.created_at) >= ?'); values.push(start_date); }
+    if (end_date) { whereClauses.push('DATE(b.created_at) <= ?'); values.push(end_date); }
+    if (origin_city) { whereClauses.push('bi.origin_city = ?'); values.push(origin_city); }
+    if (destination_city) { whereClauses.push('bi.destination_city = ?'); values.push(destination_city); }
+    if (origin_province) { whereClauses.push('bi.origin_province = ?'); values.push(origin_province); }
+    if (destination_province) { whereClauses.push('bi.destination_province = ?'); values.push(destination_province); }
+    if (service_class) { whereClauses.push('bi.service_class = ?'); values.push(service_class); }
+    if (provider) { whereClauses.push('bi.provider LIKE ?'); values.push(`%${provider}%`); }
+    if (travel_date_start) { whereClauses.push('bi.travel_date >= ?'); values.push(travel_date_start); }
+    if (travel_date_end) { whereClauses.push('bi.travel_date <= ?'); values.push(travel_date_end); }
+
+    const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+    const countSql = `SELECT COUNT(DISTINCT b.id) as total FROM Bookings b ${joins} ${whereSql}`;
+    const countResults = await query(countSql, values);
+    const totalItems = countResults[0].total;
+
+    let orderBySql = 'ORDER BY b.created_at DESC';
+    if (sort_by) {
+      const validSortColumns = ['created_at', 'total_amount', 'status', 'payment_status'];
+      const sortColumn = validSortColumns.includes(sort_by) ? `b.${sort_by}` : 'b.created_at';
+      const order = sort_order && sort_order.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+      orderBySql = `ORDER BY ${sortColumn} ${order}`;
+    }
+
+    const baseSql = `
       SELECT b.*, bi.type as item_type, bi.origin_city, bi.destination_city, 
       bi.origin_province, bi.destination_province, bi.service_class, bi.provider, bi.travel_date
       FROM Bookings b
-      LEFT JOIN BookingItems bi ON b.id = bi.booking_id
-      WHERE 1=1
+      ${joins}
+      ${whereSql}
+      GROUP BY b.id
+      ${orderBySql}
     `;
-    
-    const baseValues = [];
-    
-    // Original filters
-    if (user_id) { baseSql += ' AND b.user_id = ?'; baseValues.push(user_id); }
-    if (booking_code) { baseSql += ' AND b.booking_code LIKE ?'; baseValues.push(`%${booking_code}%`); }
-    if (status) { baseSql += ' AND b.status = ?'; baseValues.push(status); }
-    if (payment_status) { baseSql += ' AND b.payment_status = ?'; baseValues.push(payment_status); }
-    if (item_type) { baseSql += ' AND bi.type = ?'; baseValues.push(item_type); }
-    if (min_total) { baseSql += ' AND b.total_amount >= ?'; baseValues.push(min_total); }
-    if (max_total) { baseSql += ' AND b.total_amount <= ?'; baseValues.push(max_total); }
-    if (start_date) { baseSql += ' AND DATE(b.created_at) >= ?'; baseValues.push(start_date); }
-    if (end_date) { baseSql += ' AND DATE(b.created_at) <= ?'; baseValues.push(end_date); }
-    
-    // Indonesian-specific filters
-    if (origin_city) { baseSql += ' AND bi.origin_city = ?'; baseValues.push(origin_city); }
-    if (destination_city) { baseSql += ' AND bi.destination_city = ?'; baseValues.push(destination_city); }
-    if (origin_province) { baseSql += ' AND bi.origin_province = ?'; baseValues.push(origin_province); }
-    if (destination_province) { baseSql += ' AND bi.destination_province = ?'; baseValues.push(destination_province); }
-    if (service_class) { baseSql += ' AND bi.service_class = ?'; baseValues.push(service_class); }
-    if (provider) { baseSql += ' AND bi.provider LIKE ?'; baseValues.push(`%${provider}%`); }
-    if (travel_date_start) { baseSql += ' AND bi.travel_date >= ?'; baseValues.push(travel_date_start); }
-    if (travel_date_end) { baseSql += ' AND bi.travel_date <= ?'; baseValues.push(travel_date_end); }
-    
-    // Add sorting
-    if (sort_by) {
-      const validSortColumns = ['created_at', 'total_amount', 'status', 'payment_status'];
-      const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'created_at';
-      const order = sort_order && sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-      
-      baseSql += ` ORDER BY b.${sortColumn} ${order}`;
-    } else {
-      baseSql += ' ORDER BY b.created_at DESC';
-    }
-    
-    // Group by booking id to avoid duplicates from the join
-    baseSql += ' GROUP BY b.id';
-    
-    // Count total items for pagination metadata
-    // We need to wrap the original query to count after grouping
-    const countSql = `SELECT COUNT(*) as total FROM (${baseSql}) as countQuery`;
-    
-    // Apply pagination
-    const { sql, values, pagination } = paginateQuery(baseSql, { page, limit }, baseValues);
-    
-    // Execute count query first
-    db.query(countSql, baseValues, (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
-      
-      const totalItems = countResults[0].total;
-      
-      // Then execute the paginated query
-      db.query(sql, values, (err, results) => {
-        if (err) return callback(err, null);
-        
-        // Format the response with pagination metadata
-        const response = paginatedResponse(results, pagination, totalItems);
-        callback(null, response);
-      });
-    });
-  }
-};
 
-Booking.cancel = (bookingId, callback) => {
-  db.query('UPDATE Bookings SET status = ? WHERE id = ?', ['cancelled', bookingId], callback);
+    const { sql: paginatedSql, values: paginatedValues, pagination } = paginateQuery(baseSql, { page, limit }, values);
+    const results = await query(paginatedSql, paginatedValues);
+
+    return paginatedResponse(results, pagination, totalItems);
+  },
+
+  async cancel(bookingId) {
+    return query('UPDATE Bookings SET status = ?, updated_at = NOW() WHERE id = ?', ['cancelled', bookingId]);
+  },
+
+  async update(bookingId, dataToUpdate) {
+    const fields = [];
+    const values = [];
+
+    // Dynamically build the SET part of the query
+    for (const [key, value] of Object.entries(dataToUpdate)) {
+      if (value !== undefined) { // Only include fields that are actually being updated
+        fields.push(`${key} = ?`);
+        values.push(value);
+      }
+    }
+
+    if (fields.length === 0) {
+      // No fields to update, perhaps return an indication or throw an error
+      return { affectedRows: 0, message: 'No fields to update' };
+    }
+
+    // Add updated_at timestamp
+    fields.push('updated_at = NOW()');
+    values.push(bookingId); // Add bookingId for the WHERE clause
+
+    const sql = `UPDATE Bookings SET ${fields.join(', ')} WHERE id = ?`;
+    return query(sql, values);
+  }
 };
 
 module.exports = Booking;

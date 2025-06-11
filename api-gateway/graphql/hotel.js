@@ -84,13 +84,13 @@ const typeDefs = gql`
     hotelDailyStatus(hotelId: ID!, date: String!): [HotelRoomDailyStatus]
   }
 
-  type HotelRoomDailyStatus {
+ type HotelRoomDailyStatus {
     roomTypeName: String!
     date: String!
     availableRooms: Int
     price: Float
     currency: String
-  }
+  } 
 
   type Mutation {
     decreaseRoomAvailability(hotelId: ID!, roomTypeName: String!, date: String!, quantity: Int!): AvailabilityResponse

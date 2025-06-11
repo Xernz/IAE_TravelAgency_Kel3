@@ -23,6 +23,8 @@ exports.updateFlight = async (req, res) => {
 };
 
 exports.decreaseAvailability = async (req, res) => {
+  console.log('[FlightController] decreaseAvailability: req.body:', JSON.stringify(req.body));
+  console.log('[FlightController] decreaseAvailability: req.headers[content-type]:', req.headers['content-type']);
   const { id } = req.params;
   const { date, quantity = 1 } = req.body;
   if (!date) {

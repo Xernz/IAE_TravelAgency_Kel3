@@ -1,7 +1,11 @@
+require('dotenv').config();
+console.log('[Users Service] JWT_SECRET:', process.env.JWT_SECRET);
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const userRoutes = require('./routes/userRoutes');
+const { ApolloServer } = require('apollo-server-express');
+const { typeDefs, resolvers } = require('./graphql/schema');
 const logger = require('./logger');
 
 const app = express();
@@ -19,6 +23,19 @@ app.use((req, res, next) => {
 // User API routes
 app.use('/api/users', userRoutes);
 
+// Apollo Server setup
+async function startApolloServer() {
+  const server = new ApolloServer({ typeDefs, resolvers });
+  await server.start();
+  server.applyMiddleware({ app, path: '/graphql' });
+
+  app.listen(PORT, () => {
+    logger.info(`Users Service with Apollo GraphQL running on port ${PORT}`);
+  });
+}
+
+startApolloServer();
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', service: 'users-service', time: new Date().toISOString() });
@@ -34,6 +51,4 @@ app.use((err, req, res, next) => {
   res.status(500).json({ status: 'error', message: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  logger.info(`Users Service listening on port ${PORT}`);
-});
+

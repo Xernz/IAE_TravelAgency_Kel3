@@ -21,8 +21,8 @@ const typeDefs = gql`
     password: String!
     full_name: String!
     phone_number: String
-    birth_date: String!
-    no_nik: String!
+    birth_date: String
+    no_nik: String
     address: String
     kelurahan: String
     kecamatan: String
@@ -150,15 +150,15 @@ const resolvers = {
         return {
           status: data.status,
           message: data.message,
-          user: data.data,
-          token: data.token
+          user: data.data.user,
+          token: data.data.token
         };
       } catch (err) {
         throw new Error('Login failed: ' + err.message);
       }
     },
     async register(_, { input }) {
-      if (!input.email || !input.password || !input.full_name || !input.birth_date || !input.no_nik) {
+      if (!input.email || !input.password || !input.full_name) {
         throw new Error('Missing required fields');
       }
       try {
@@ -172,8 +172,8 @@ const resolvers = {
         return {
           status: data.status,
           message: data.message,
-          user: data.data,
-          token: data.token
+          user: data.data.user,
+          token: data.data.token
         };
       } catch (err) {
         throw new Error('Registration failed: ' + err.message);

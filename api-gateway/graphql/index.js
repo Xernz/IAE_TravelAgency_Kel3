@@ -9,8 +9,6 @@ const { typeDefs: flightTypeDefs, resolvers: flightResolvers } = require('./flig
 const { typeDefs: trainTypeDefs, resolvers: trainResolvers } = require('./train');
 const { typeDefs: localTravelTypeDefs, resolvers: localTravelResolvers } = require('./localTravel');
 
-const app = express();
-
 // Combine all typeDefs and resolvers (add more as you expand other domains)
 const typeDefs = [
   bookingTypeDefs,
@@ -31,14 +29,19 @@ const resolvers = [
   localTravelResolvers
 ];
 
-async function startApolloServer() {
+async function startApolloServer(app) { // Accept the main app instance
   const server = new ApolloServer({
     typeDefs,
     resolvers,
+    context: ({ req }) => {
+      // Return an object that will be the context for all resolvers
+      // We are specifically adding the req object here so it can be accessed in resolvers
+      return { req };
+    },
   });
   await server.start();
-  server.applyMiddleware({ app, path: '/graphql' });
-  return app;
+  server.applyMiddleware({ app, path: '/graphql' }); // Apply middleware to the passed app
+  return app; // Return the same app instance
 }
 
-module.exports = { startApolloServer, app };
+module.exports = { startApolloServer }; // Export only the function

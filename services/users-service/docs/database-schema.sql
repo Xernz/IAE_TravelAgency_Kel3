@@ -1,4 +1,7 @@
 -- Users Service Database Schema (Simplified)
+-- Drop and create database to reset
+DROP DATABASE IF EXISTS travel_users_db;
+CREATE DATABASE travel_users_db;
 
 -- Use the users service database
 USE travel_users_db;
@@ -10,8 +13,8 @@ CREATE TABLE IF NOT EXISTS Users (
     password VARCHAR(100) NOT NULL, -- Simple password storage (not hashed for simplicity)
     full_name VARCHAR(255) NOT NULL,
     phone_number VARCHAR(20),
-    birth_date DATE NOT NULL,
-    no_nik VARCHAR(32) NOT NULL,
+    birth_date DATE NULL,
+    no_nik VARCHAR(32) NULL,
     address VARCHAR(255),
     kelurahan VARCHAR(100),
     kecamatan VARCHAR(100),
