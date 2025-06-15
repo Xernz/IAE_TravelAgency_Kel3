@@ -1,8 +1,7 @@
 const { gql } = require('apollo-server-express');
 const axios = require('axios');
-require('dotenv').config(); // To load .env variables
 
-const EXTERNAL_USER_SERVICE_URL = process.env.EXTERNAL_USER_SERVICE_URL;
+const EXTERNAL_USER_SERVICE_URL = 'http://localhost:4001/graphql';
 
 const typeDefs = gql`
   type ExternalLoginStatus {

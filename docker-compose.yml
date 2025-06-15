@@ -166,6 +166,7 @@ services:
       PAYMENTS_SERVICE_URL: http://payment-service:3005
       LOCAL_TRAVEL_SERVICE_URL: http://local-travel-service:3006
       TRAINS_SERVICE_URL: http://train-service:3007
+      EXTERNAL_USER_SERVICE_URL: http://host.docker.internal:4001 # For externally running user service
     depends_on:
       - users-service
       - flight-service
