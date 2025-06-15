@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import { TextField, Button, Box, Typography, Alert } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { LOGIN } from '../services/graphqlUserQueries';
+import { AuthContext } from '../context/AuthContext';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { login } = React.useContext(AuthContext);
 
   const [loginMutation, { loading: loggingIn }] = useMutation(LOGIN);
 
@@ -17,11 +19,8 @@ export default function Login() {
     setError('');
     try {
       const { data } = await loginMutation({ variables: { email, password } });
-      if (data.login.status === 'success') {
-        localStorage.setItem('user', JSON.stringify(data.login.user));
-        if (data.login.token) {
-          localStorage.setItem('token', data.login.token);
-        }
+      if (data.login.status === 'success' && data.login.user && data.login.token) {
+        login(data.login.user, data.login.token); // Use login from AuthContext
         navigate('/');
       } else {
         setError(data.login.message || 'Login failed');
@@ -41,6 +40,7 @@ export default function Login() {
         <Button type="submit" variant="contained" color="primary" fullWidth sx={{ mt: 2 }}>Login</Button>
       </form>
       <Button onClick={() => navigate('/register')} sx={{ mt: 2 }}>Don't have an account? Register</Button>
+      <Button component={Link} to="/simple-external-login" sx={{ mt: 1, display: 'block', textAlign: 'center' }}>Or, Login with External Service</Button>
     </Box>
   );
 }

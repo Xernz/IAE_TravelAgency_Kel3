@@ -1,138 +1,124 @@
 import { gql } from '@apollo/client';
 
-// Hotel detail query
+/**
+ * Fetches detailed static information for a single hotel, including its
+ * defined room types. Note: Room availability and pricing are NOT included here.
+ * Use GET_HOTEL_DAILY_STATUS for dynamic room data.
+ */
 export const GET_HOTEL_DETAIL = gql`
   query GetHotelDetail($id: ID!) {
     hotel(id: $id) {
       id
       name
       city
-      province
-      kabupaten
-      postal_code
-      property_type
-      description
-      rooms {
-        id
-        type
-        price
-        availability
-      }
-    }
-  }
-`;
-
-
-// Hotel paginated list (copied from graphqlQueries.js)
-export const GET_HOTELS = gql`
-  query GetHotels($limit: Int, $page: Int) {
-    hotels(limit: $limit, page: $page) {
-      hotels {
-        id
-        name
+      address {
+        street
         city
         province
-        address
-        star_rating
-        property_type
-        has_wifi
-        has_breakfast
       }
-      pagination {
-        totalItems
-        totalPages
-        currentPage
-        pageSize
+      stars
+      property_type
+      description
+      facilities
+      room_types {
+        name
+        description
+        capacity
+        features
       }
     }
   }
 `;
 
-// Hotel search by city/province (copied from graphqlQueries.js)
-export const SEARCH_HOTELS = gql`
-  query SearchHotels($city: String, $province: String) {
-    searchHotels(city: $city, province: $province) {
+/**
+ * Fetches the daily status (availability, price) for all room types
+ * of a specific hotel on a given date. This is the primary query for
+ * checking room availability and prices.
+ */
+export const GET_HOTEL_DAILY_STATUS = gql`
+  query GetHotelDailyStatus($hotelId: ID!, $date: String!) {
+    hotelDailyStatus(hotelId: $hotelId, date: $date) {
+      roomTypeName
+      availableRooms
+      price
+      currency
+    }
+  }
+`;
+
+/**
+ * Filters and paginates hotels based on a variety of criteria.
+ * This query returns a list of hotels with their static data.
+ * To get room prices/availability, a separate GET_HOTEL_DAILY_STATUS
+ * call is needed for a selected hotel.
+ */
+export const FILTER_HOTELS = gql`
+  query FilterHotels($filters: HotelFiltersInput, $sort: HotelSortInput, $pagination: PaginationInput) {
+  filterHotels(filters: $filters, sort: $sort, pagination: $pagination) {
+    hotels {
       id
       name
       city
-      province
-      address
-      star_rating
-      property_type
-      has_wifi
-      has_breakfast
-      rooms {
-        id
-        name
-        size
-        available
-        price
-      }
-      pricing {
-        room_type_id
-        date
-        price
-      }
-    }
-  }
-`;
-
-
-export const FILTER_HOTELS = gql`
-  query FilterHotels($filters: HotelFiltersInput, $sort: HotelSortInput, $pagination: PaginationInput) {
-    filterHotels(filters: $filters, sort: $sort, pagination: $pagination) {
-      hotels {
-        id
-        name
+      address {
+        street
         city
         province
-        country
-        address
-        postal_code
-        star_rating
-        property_type
-        description
-        amenities
-        images
-        has_wifi
-        has_breakfast
-        has_parking
-        is_pet_friendly
-        min_price_per_night
-        max_price_per_night
       }
-      pagination {
-        totalItems
-        totalPages
-        currentPage
-        pageSize
-      }
+      stars
+      property_type
+      description
+      facilities
+      __typename
     }
+    pagination {
+      totalItems
+      totalPages
+      currentPage
+      __typename
+    }
+    __typename
   }
-`;
+}`;
 
-// See HotelList.js for expected filters, pagination, and response structure.
-
-// Hotel availability (copied from graphqlQueries.js)
-export const HOTEL_AVAILABILITY = gql`
-  query HotelAvailability($id: ID, $check_in: String) {
-    hotelAvailability(id: $id, check_in: $check_in) {
+/**
+ * Creates a new hotel and its associated room types with initial
+ * pricing and availability.
+ */
+export const CREATE_HOTEL = gql`
+  mutation CreateHotel(
+    $name: String!
+    $city: String!
+    $address: String!
+    $stars: Int
+    $property_type: String
+    $description: String
+    $facilities: String
+    $room_types: [RoomTypeInput!]!
+  ) {
+    createHotel(
+      name: $name
+      city: $city
+      address: $address
+      stars: $stars
+      property_type: $property_type
+      description: $description
+      facilities: $facilities
+      room_types: $room_types
+    ) {
       id
       name
-      size
-      available
-      price
-    }
-  }
-`;
-
-// Hotel pricing (copied from graphqlQueries.js)
-export const HOTEL_PRICING = gql`
-  query HotelPricing($id: ID, $check_in: String, $check_out: String) {
-    hotelPricing(id: $id, check_in: $check_in, check_out: $check_out) {
-      room_type_id
-      date
-      price
+      city
+      address
+      stars
+      property_type
+      description
+      facilities
+      room_types {
+        name
+        description
+        capacity
+        features
+      }
     }
   }
 `;

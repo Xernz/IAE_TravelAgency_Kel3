@@ -1,147 +1,113 @@
 import { gql } from '@apollo/client';
 
-// Flight detail query
+/**
+ * Fetches detailed static information for a single flight and its dynamic
+ * daily status (price, availability) for a specific date.
+ */
 export const GET_FLIGHT_DETAIL = gql`
-  query GetFlightDetail($id: ID!) {
+  query GetFlightDetail($id: ID!, $date: String!) {
     flight(id: $id) {
       id
-      airline
-      origin
-      destination
-      departure_time
-      arrival_time
-      price
-      details
-    }
-  }
-`;
-
-
-// Flight pricing query
-export const FLIGHT_PRICING = gql`
-  query FlightPricing($id: ID!, $check_in: String, $check_out: String) {
-    flightPricing(id: $id, check_in: $check_in, check_out: $check_out) {
-      basePrice
-      taxes
-      fees
-      total
-      currency
-      discount
-      available
-    }
-  }
-`;
-
-
-// Flight list query (copied from graphqlQueries.js)
-export const GET_FLIGHTS = gql`
-  query GetFlights($origin: String, $destination: String, $date: String) {
-    flights(origin: $origin, destination: $destination, date: $date) {
-      id
-      airline
       flight_number
-      origin
-      destination
+      airline
+      origin_airport_iata
+      destination_airport_iata
       departure_time
       arrival_time
-      price
-      seats_available
+      dailyStatus(date: $date) {
+        price
+        availableSeats
+        currency
+      }
     }
   }
 `;
 
+/**
+ * Fetches the daily status (price, availability) for a specific flight on a specific date.
+ * This is a more lightweight query than GET_FLIGHT_DETAIL if only pricing is needed.
+ */
+export const GET_FLIGHT_DAILY_STATUS = gql`
+  query GetFlightDailyStatus($flightId: ID!, $date: String!) {
+    flightDailyStatus(flightId: $flightId, date: $date) {
+      price
+      availableSeats
+      currency
+    }
+  }
+`;
 
-// Flight filter (copied from graphqlQueries.js)
+/**
+ * Filters and paginates flights based on a variety of criteria.
+ * Also fetches the daily status for each flight in the result for a given date.
+ */
 export const FILTER_FLIGHTS = gql`
   query FilterFlights(
-    $origin_city: String
-    $destination_city: String
-    $origin_code: String
-    $destination_code: String
-    $airline_name: String
-    $airline_code: String
-    $flight_class: String
-    $departure_date: String # Format YYYY-MM-DD
-    $min_price: Float
-    $max_price: Float
-    $sort_by: String # e.g., "price", "departure_time"
-    $sort_order: String # "ASC" or "DESC"
-    $page: Int
-    $limit: Int
+    $filters: FlightFiltersInput
+    $sort: FlightSortInput
+    $pagination: PaginationInput
+    $statusDate: String! # Date for which to fetch status, e.g., "YYYY-MM-DD"
   ) {
     filterFlights(
-      filter: {
-        origin_city: $origin_city
-        destination_city: $destination_city
-        origin_code: $origin_code
-        destination_code: $destination_code
-        airline_name: $airline_name
-        airline_code: $airline_code
-        flight_class: $flight_class
-        departure_date: $departure_date
-        min_price: $min_price
-        max_price: $max_price
-      }
-      sort: {
-        by: $sort_by
-        order: $sort_order
-      }
-      pagination: {
-        page: $page
-        limit: $limit
-      }
+      filters: $filters
+      sort: $sort
+      pagination: $pagination
     ) {
       flights {
         id
-        airline_code
-        airline_name
         flight_number
-        origin_city
-        destination_city
-        origin_code
-        destination_code
+        airline
+        origin_airport_iata
+        destination_airport_iata
         departure_time
         arrival_time
-        duration
-        flight_class
-        price
-        seats_available
-        currency
-        stops
-        status
+        dailyStatus(date: $statusDate) {
+          price
+          availableSeats
+          currency
+        }
       }
       pagination {
-        total_items
-        total_pages
-        current_page
-        limit
+        totalItems
+        totalPages
+        currentPage
       }
     }
   }
 `;
-// Flight creation (copied from graphqlQueries.js)
+
+/**
+ * Creates a new flight with its initial pricing and availability.
+ * The backend handles creating the initial daily status entry.
+ */
 export const CREATE_FLIGHT = gql`
-  mutation CreateFlight($airline: String, $flight_number: String, $origin: String, $destination: String, $departure_time: String, $arrival_time: String, $price: Float, $seats_available: Int) {
+  mutation CreateFlight(
+    $flight_number: String!
+    $airline: String!
+    $origin_airport_iata: String!
+    $destination_airport_iata: String!
+    $departure_time: String!
+    $arrival_time: String!
+    $price: Float!
+    $seats_available: Int!
+  ) {
     createFlight(
-      airline: $airline
       flight_number: $flight_number
-      origin: $origin
-      destination: $destination
+      airline: $airline
+      origin_airport_iata: $origin_airport_iata
+      destination_airport_iata: $destination_airport_iata
       departure_time: $departure_time
       arrival_time: $arrival_time
       price: $price
       seats_available: $seats_available
     ) {
       id
-      airline
       flight_number
-      origin
-      destination
+      airline
+      origin_airport_iata
+      destination_airport_iata
       departure_time
       arrival_time
-      price
-      seats_available
     }
   }
 `;
-

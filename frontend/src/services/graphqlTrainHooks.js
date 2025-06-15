@@ -1,78 +1,67 @@
 import { useQuery, useMutation } from '@apollo/client';
 import {
+  FILTER_TRAINS,
   GET_TRAIN_DETAIL,
-  GET_TRAINS,
-  TRAIN_PRICING,
-  // Add other train queries as needed
+  GET_TRAIN_DAILY_STATUS,
+  CREATE_TRAIN,
 } from './graphqlTrainQueries';
 import {
   CREATE_BOOKING,
   CANCEL_BOOKING,
-  // Add other booking mutations as needed
-} from './graphqlBookingQueries';
+} from './graphqlBookingQueries'; // Assuming this file exists and is correct
 
-// Query Hooks
-export function useTrains(filters = {}) {
-  const {
-    page = 1,
-    limit = 10,
-    sort_by,
-    sort_order,
-    origin_station_name,
-    destination_station_name,
-    origin_station_code,
-    destination_station_code,
-    departure_date,
-    train_class,
-    sub_class,
-    min_price,
-    max_price,
-    operator_name,
-    train_type,
-    origin_city,
-    destination_city,
-    origin_province,
-    destination_province
-  } = filters;
+/**
+ * Hook to fetch and filter trains.
+ * @param {object} params - The filter, sort, and pagination parameters.
+ * @param {string} params.statusDate - The date for which to fetch train status (YYYY-MM-DD).
+ */
+export function useFilterTrains({ filters = {}, sort = {}, pagination = {}, statusDate }) {
+  // Clean up undefined keys from filters, sort, and pagination objects
+  const cleanedFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null));
+  const cleanedSort = Object.fromEntries(Object.entries(sort).filter(([_, v]) => v != null));
+  const cleanedPagination = Object.fromEntries(Object.entries(pagination).filter(([_, v]) => v != null));
 
-  const queryVariables = {
-    origin_station_name,
-    destination_station_name,
-    origin_station_code,
-    destination_station_code,
-    departure_date,
-    train_class,
-    sub_class,
-    min_price: min_price ? parseFloat(min_price) : undefined,
-    max_price: max_price ? parseFloat(max_price) : undefined,
-    operator_name,
-    train_type,
-    origin_city,
-    destination_city,
-    origin_province,
-    destination_province,
-    sort_by,
-    sort_order,
-    page,
-    limit
-  };
-  Object.keys(queryVariables).forEach(key => queryVariables[key] === undefined && delete queryVariables[key]);
-
-  return useQuery(GET_TRAINS, {
-    variables: queryVariables,
+  return useQuery(FILTER_TRAINS, {
+    variables: {
+      filters: cleanedFilters,
+      sort: cleanedSort,
+      pagination: cleanedPagination,
+      statusDate,
+    },
     fetchPolicy: 'cache-and-network',
+    skip: !statusDate, // Don't run the query if the statusDate isn't provided
   });
 }
 
-export function useTrainDetail(id) {
-  return useQuery(GET_TRAIN_DETAIL, { variables: { id } });
+/**
+ * Hook to fetch the details of a single train, including its daily status for a specific date.
+ * @param {string} id - The ID of the train.
+ * @param {string} date - The date for which to fetch the train's status (YYYY-MM-DD).
+ */
+export function useTrainDetail(id, date) {
+  return useQuery(GET_TRAIN_DETAIL, {
+    variables: { id, date },
+    skip: !id || !date, // Don't run if id or date are missing
+  });
 }
 
-export function useTrainPricing(id, check_in, check_out) {
-  return useQuery(TRAIN_PRICING, { variables: { id, check_in, check_out } });
+/**
+ * Hook to fetch the daily status (price, availability) for a specific train on a given date.
+ * @param {string} trainId - The ID of the train.
+ * @param {string} date - The date for which to fetch status (YYYY-MM-DD).
+ */
+export function useTrainDailyStatus(trainId, date) {
+  return useQuery(GET_TRAIN_DAILY_STATUS, {
+    variables: { trainId, date },
+    skip: !trainId || !date, // Don't run if trainId or date are missing
+  });
 }
 
 // Mutation Hooks
+export function useCreateTrain(options = {}) {
+  return useMutation(CREATE_TRAIN, options);
+}
+
 export function useCreateTrainBooking(options = {}) {
   return useMutation(CREATE_BOOKING, options);
 }

@@ -87,13 +87,24 @@ const Hotel = {
     
     // Execute count query first
     db.query(countSql, [], (countErr, countResults) => {
-      if (countErr) return callback(countErr, null);
+      if (countErr) {
+        console.error("Error in count query (Hotel.listAll):", countErr);
+        return callback(countErr, null);
+      }
       
+      // Safely access totalItems
+      if (!countResults || countResults.length === 0 || typeof countResults[0].total === 'undefined') {
+        console.error("Unexpected result from count query (Hotel.listAll):", countResults);
+        return callback(new Error('Failed to retrieve total count for hotels.'), null);
+      }
       const totalItems = countResults[0].total;
       
       // Then execute the paginated query
       db.query(sql, values, (err, results) => {
-        if (err) return callback(err, null);
+        if (err) {
+          console.error("Error in data query (Hotel.listAll):", err);
+          return callback(err, null);
+        }
         
         // Format the response with pagination metadata
         const response = paginatedResponse(results, pagination, totalItems);

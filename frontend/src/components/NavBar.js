@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { 
   AppBar, Toolbar, Typography, Button, Box, IconButton, Menu, MenuItem, 
   useMediaQuery, useTheme, Drawer, List, ListItem, ListItemText, Divider, Avatar
 } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import MenuIcon from '@mui/icons-material/Menu';
 import FlightIcon from '@mui/icons-material/Flight';
 import HotelIcon from '@mui/icons-material/Hotel';
@@ -15,7 +16,8 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import LoginIcon from '@mui/icons-material/Login';
 
 export default function NavBar() {
-  const user = JSON.parse(localStorage.getItem('user'));
+  const navigate = useNavigate();
+  const { currentUser, logout, isAuthenticated } = useContext(AuthContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -34,9 +36,8 @@ export default function NavBar() {
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('user');
-    window.location.href = '/login';
-    handleProfileMenuClose();
+    logout();
+    navigate('/login');
   };
 
   const navItems = [
@@ -70,7 +71,7 @@ export default function NavBar() {
           </ListItem>
         ))}
         <Divider sx={{ my: 1 }} />
-        {user ? (
+        {isAuthenticated && currentUser ? (
           <>
             <ListItem 
               component={RouterLink} 
@@ -174,7 +175,7 @@ export default function NavBar() {
               </Button>
             ))}
             
-            {user ? (
+            {isAuthenticated && currentUser ? (
               <>
                 <IconButton 
                   onClick={handleProfileMenuOpen}
@@ -182,7 +183,7 @@ export default function NavBar() {
                   sx={{ ml: 1 }}
                 >
                   <Avatar sx={{ width: 32, height: 32, bgcolor: '#fff', color: '#1976d2' }}>
-                    {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                    {currentUser.fullName ? currentUser.fullName.charAt(0).toUpperCase() : (currentUser.email ? currentUser.email.charAt(0).toUpperCase() : 'U')}
                   </Avatar>
                 </IconButton>
                 <Menu

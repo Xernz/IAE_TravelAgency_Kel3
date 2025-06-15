@@ -1,112 +1,137 @@
 import { gql } from '@apollo/client';
 
-// Train detail query
+/**
+ * Fetches detailed static information for a single train and its dynamic
+ * daily status (price, availability) for a specific date.
+ */
 export const GET_TRAIN_DETAIL = gql`
-  query GetTrainDetail($id: ID!) {
+  query GetTrainDetail($id: ID!, $date: String!) {
     train(id: $id) {
       id
-      train_name
-      origin_province
-      destination_province
-      subclass
-      train_type
-      price_category
-      details
+      name
+      train_number
+      operator
+      origin_station_code
+      origin_station_name
+      destination_station_code
+      destination_station_name
+      departure_time
+      arrival_time
+      duration
+      description
+      facilities
+      dailyStatus(date: $date) {
+        price
+        availableSeats
+        currency
+      }
     }
   }
 `;
 
-
-// Train pricing query
-export const TRAIN_PRICING = gql`
-  query TrainPricing($id: ID!, $check_in: String, $check_out: String) {
-    trainPricing(id: $id, check_in: $check_in, check_out: $check_out) {
-      basePrice
-      taxes
-      fees
-      total
+/**
+ * Fetches the daily status (price, availability) for a specific train on a specific date.
+ */
+export const GET_TRAIN_DAILY_STATUS = gql`
+  query GetTrainDailyStatus($trainId: ID!, $date: String!) {
+    trainDailyStatus(trainId: $trainId, date: $date) {
+      price
+      availableSeats
       currency
-      discount
-      available
     }
   }
 `;
 
-
-// Train list query (copied from graphqlQueries.js)
-export const GET_TRAINS = gql`
-  query GetTrains($origin: String, $destination: String, $date: String) {
-    trains(origin: $origin, destination: $destination, date: $date) {
-      id
-      train_name
-      origin_province
-      destination_province
-      subclass
-      train_type
-      price_category
-    }
-  }
-`;
-
-
+/**
+ * Filters and paginates trains based on a variety of criteria.
+ * Also fetches the daily status for each train in the result for a given date.
+ */
 export const FILTER_TRAINS = gql`
   query FilterTrains(
     $filters: TrainFiltersInput
     $sort: TrainSortInput
     $pagination: PaginationInput
+    $statusDate: String! # Date for which to fetch status, e.g., "YYYY-MM-DD"
   ) {
     filterTrains(filters: $filters, sort: $sort, pagination: $pagination) {
       trains {
         id
+        name
         train_number
+        operator
+        origin_station_code
         origin_station_name
+        destination_station_code
         destination_station_name
-        origin_city
-        destination_city
-        origin_province
-        destination_province
         departure_time
         arrival_time
-        price
-        seats_available
-        train_class
-        subclass
-        train_type
-        operator
         duration
+        description
+        facilities
+        dailyStatus(date: $statusDate) {
+          price
+          availableSeats
+          currency
+        }
       }
       pagination {
         totalItems
         totalPages
         currentPage
-        pageSize
-        hasNextPage
-        hasPrevPage
       }
     }
   }
 `;
 
-// Train creation (copied from graphqlQueries.js)
+/**
+ * Creates a new train with its initial pricing and availability.
+ */
 export const CREATE_TRAIN = gql`
-  mutation CreateTrain($train_number: String, $origin: String, $destination: String, $departure_time: String, $arrival_time: String, $price: Float, $seats_available: Int) {
+  mutation CreateTrain(
+    $name: String!
+    $train_number: String!
+    $operator: String
+    $origin_station_code: String!
+    $origin_station_name: String!
+    $destination_station_code: String!
+    $destination_station_name: String!
+    $departure_time: String!
+    $arrival_time: String!
+    $duration: String
+    $description: String
+    $facilities: String
+    $price: Float!
+    $seats_available: Int!
+  ) {
     createTrain(
-      train_number: $train_number,
-      origin: $origin,
-      destination: $destination,
-      departure_time: $departure_time,
-      arrival_time: $arrival_time,
-      price: $price,
+      name: $name
+      train_number: $train_number
+      operator: $operator
+      origin_station_code: $origin_station_code
+      origin_station_name: $origin_station_name
+      destination_station_code: $destination_station_code
+      destination_station_name: $destination_station_name
+      departure_time: $departure_time
+      arrival_time: $arrival_time
+      duration: $duration
+      description: $description
+      facilities: $facilities
+      price: $price
       seats_available: $seats_available
     ) {
       id
+      name
       train_number
-      origin
-      destination
+      operator
+      origin_station_code
+      origin_station_name
+      destination_station_code
+      destination_station_name
       departure_time
       arrival_time
-      price
-      seats_available
+      duration
+      description
+      facilities
     }
   }
 `;

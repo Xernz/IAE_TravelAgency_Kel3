@@ -15,13 +15,13 @@ app.use(morgan('dev'));
 
 // Proxy configuration for each microservice
 const services = {
-  users:    { target: 'http://localhost:3001', path: '/api/users' },
-  flights:  { target: 'http://localhost:3002', path: '/api/flights' },
-  hotels:   { target: 'http://localhost:3003', path: '/api/hotels' },
-  bookings: { target: 'http://localhost:3004', path: '/api/bookings' },
-  payments: { target: 'http://localhost:3005', path: '/api/payments' },
-  local:    { target: 'http://localhost:3006', path: '/api/local-travel' },
-  trains:   { target: 'http://localhost:3007', path: '/api/trains' }
+  users:    { target: process.env.USERS_SERVICE_URL || 'http://users-service:3001', path: '/api/users' },
+  flights:  { target: process.env.FLIGHTS_SERVICE_URL || 'http://flight-service:3002', path: '/api/flights' },
+  hotels:   { target: process.env.HOTELS_SERVICE_URL || 'http://hotel-service:3003', path: '/api/hotels' },
+  bookings: { target: process.env.BOOKINGS_SERVICE_URL || 'http://booking-service:3004', path: '/api/bookings' },
+  payments: { target: process.env.PAYMENTS_SERVICE_URL || 'http://payment-service:3005', path: '/api/payments' },
+  local:    { target: process.env.LOCAL_TRAVEL_SERVICE_URL || 'http://local-travel-service:3006', path: '/api/local-travel' },
+  trains:   { target: process.env.TRAINS_SERVICE_URL || 'http://train-service:3007', path: '/api/trains' }
 };
 
 // Register proxy routes

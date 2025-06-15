@@ -1,35 +1,39 @@
 import React, { useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useFlightDetail } from '../services/graphqlFlightHooks';
-import { useCreateFlightBooking } from '../services/graphqlBookingHooks';
-import { AuthContext } from '../context/AuthContext'; // Added
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useGetFlightById } from '../services/graphqlFlightHooks';
+import { useCreateBooking } from '../services/graphqlBookingHooks';
+import { AuthContext } from '../context/AuthContext';
 import {
-  Typography, Box, CircularProgress, TextField, Button, Alert, Paper, Grid // Added form components
+  Typography, Box, CircularProgress, TextField, Button, Alert, Paper, Grid
 } from '@mui/material';
+import formatIDR from '../utils/formatIDR';
+
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
 
 export default function FlightDetail() {
-  const { id: flightId } = useParams(); // Renamed id to flightId for clarity
+  const { id: flightId } = useParams();
+  const query = useQuery();
+  const date = query.get('date');
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
 
-  // State for booking form
   const [numberOfPassengers, setNumberOfPassengers] = useState(1);
   const [bookingError, setBookingError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(null);
 
-  // Get flight details query
-  const { loading: queryLoading, error: queryError, data } = useFlightDetail(flightId);
+  const { loading: queryLoading, error: queryError, data } = useGetFlightById(flightId, date);
 
-  // Create flight booking mutation
-  const [createFlightBooking, { loading: mutationLoading }] = useCreateFlightBooking({
+  const [createBooking, { loading: mutationLoading }] = useCreateBooking({
     onError: (error) => {
       setBookingError(`Booking failed: ${error.message}`);
       setBookingSuccess(null);
     },
     onCompleted: (data) => {
-      setBookingSuccess(`Booking successful! Booking ID: ${data.createFlight.id}. You will be redirected to My Bookings shortly.`);
+      setBookingSuccess(`Booking successful! Booking ID: ${data.createBooking.id}. You will be redirected shortly.`);
       setBookingError(null);
-      setTimeout(() => navigate('/my-bookings'), 3000); // Redirect after a delay
+      setTimeout(() => navigate('/my-bookings'), 3000);
     }
   });
 
@@ -44,21 +48,36 @@ export default function FlightDetail() {
       return;
     }
 
-    if (!flightId || numberOfPassengers <= 0) {
+    const passengers = parseInt(numberOfPassengers, 10);
+    if (!flightId || passengers <= 0) {
       setBookingError('Please ensure all booking details are correct.');
       return;
     }
 
+    const flight = data?.flight;
+    if (!flight || !flight.dailyStatus) {
+        setBookingError('Flight information is not available for the selected date.');
+        return;
+    }
+
     try {
-      await createFlightBooking({
+      await createBooking({
         variables: {
-          userId: currentUser.id,
-          flightId: flightId,
-          numberOfPassengers: parseInt(numberOfPassengers, 10),
+          input: {
+            userId: currentUser.uid, // Ensure you are using the correct user ID field from your auth context
+            bookingType: 'FLIGHT',
+            bookingDetails: {
+              flightBookingDetails: {
+                flightId: flightId,
+                numberOfPassengers: passengers,
+              }
+            },
+            totalAmount: flight.dailyStatus.price * passengers,
+            currency: 'IDR',
+          }
         }
       });
     } catch (err) {
-      // Error is handled by onError in useMutation
       console.error('Booking submission error:', err);
     }
   };
@@ -68,52 +87,59 @@ export default function FlightDetail() {
   if (!data || !data.flight) return <Alert severity="warning">Flight details not found.</Alert>;
 
   const flight = data.flight;
+  const dailyStatus = flight.dailyStatus;
 
   return (
     <Box sx={{ padding: 3, maxWidth: 800, margin: '20px auto' }}>
       <Paper elevation={3} sx={{ padding: 3 }}>
-        <Typography variant="h4" mb={3} align="center">Detail Penerbangan</Typography>
+        <Typography variant="h4" mb={3} align="center">Flight Details</Typography>
         
         <Grid container spacing={2} mb={3}>
           <Grid item xs={12} md={6}>
-            <Typography variant="h6" gutterBottom>Informasi Penerbangan</Typography>
-            <Typography><b>Maskapai:</b> {flight.airline}</Typography>
-            <Typography><b>Nomor Penerbangan:</b> {flight.flight_number}</Typography>
-            <Typography><b>Rute:</b> {flight.origin} → {flight.destination}</Typography>
-            <Typography><b>Keberangkatan:</b> {new Date(flight.departure_time).toLocaleString()}</Typography>
-            <Typography><b>Kedatangan:</b> {new Date(flight.arrival_time).toLocaleString()}</Typography>
-            <Typography><b>Harga per Tiket:</b> Rp {flight.price?.toLocaleString()}</Typography>
-            <Typography><b>Ketersediaan Kursi:</b> {flight.seats_available}</Typography>
-            {flight.details && <Typography><b>Keterangan:</b> {flight.details}</Typography>}
+            <Typography variant="h6" gutterBottom>Flight Information</Typography>
+            <Typography><b>Airline:</b> {flight.airlineName}</Typography>
+            <Typography><b>Flight Number:</b> {flight.flightNumber}</Typography>
+            <Typography><b>Route:</b> {`${flight.origin.city} (${flight.origin.code})`} → {`${flight.destination.city} (${flight.destination.code})`}</Typography>
+            <Typography><b>Departure:</b> {new Date(flight.departureTime).toLocaleString()}</Typography>
+            <Typography><b>Arrival:</b> {new Date(flight.arrivalTime).toLocaleString()}</Typography>
+            {dailyStatus ? (
+              <>
+                <Typography><b>Price per Ticket:</b> {formatIDR(dailyStatus.price)}</Typography>
+                <Typography><b>Available Seats:</b> {dailyStatus.seatsAvailable}</Typography>
+              </>
+            ) : (
+              <Typography color="error">Price and availability not available for the selected date.</Typography>
+            )}
+            {flight.description && <Typography><b>Notes:</b> {flight.description}</Typography>}
           </Grid>
 
           <Grid item xs={12} md={6}>
-            <Typography variant="h6" gutterBottom>Formulir Pemesanan</Typography>
+            <Typography variant="h6" gutterBottom>Booking Form</Typography>
             <Box component="form" onSubmit={handleBooking} noValidate sx={{ mt: 1 }}>
               <TextField
                 margin="normal"
                 required
                 fullWidth
                 id="numberOfPassengers"
-                label="Jumlah Penumpang"
+                label="Number of Passengers"
                 name="numberOfPassengers"
                 type="number"
                 InputProps={{ inputProps: { min: 1 } }}
                 value={numberOfPassengers}
                 onChange={(e) => setNumberOfPassengers(e.target.value)}
-                disabled={mutationLoading}
+                disabled={mutationLoading || !dailyStatus}
               />
               <Button
                 type="submit"
                 fullWidth
                 variant="contained"
                 sx={{ mt: 3, mb: 2 }}
-                disabled={mutationLoading || !flight.seats_available || numberOfPassengers > flight.seats_available}
+                disabled={mutationLoading || !dailyStatus || parseInt(numberOfPassengers, 10) > dailyStatus.seatsAvailable}
               >
-                {mutationLoading ? <CircularProgress size={24} /> : 'Pesan Sekarang'}
+                {mutationLoading ? <CircularProgress size={24} /> : 'Book Now'}
               </Button>
-              {numberOfPassengers > flight.seats_available && (
-                <Alert severity="warning" sx={{ mt: 1 }}>Jumlah penumpang melebihi kursi yang tersedia.</Alert>
+              {dailyStatus && parseInt(numberOfPassengers, 10) > dailyStatus.seatsAvailable && (
+                <Alert severity="warning" sx={{ mt: 1 }}>Number of passengers exceeds available seats.</Alert>
               )}
             </Box>
           </Grid>

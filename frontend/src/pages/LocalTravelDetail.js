@@ -1,34 +1,40 @@
 import React, { useState, useContext } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useLocalTravelDetail } from '../services/graphqlLocalTravelHooks';
-import { useCreateLocalTravelBooking } from '../services/graphqlBookingHooks';
-import { AuthContext } from '../context/AuthContext'; // Added
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useLocalTravelDetail, useLocalTravelDailyStatus } from '../services/graphqlLocalTravelHooks';
+import { useCreateBooking } from '../services/graphqlBookingHooks';
+import { AuthContext } from '../context/AuthContext';
 import {
-  Typography, Box, CircularProgress, Button, Alert, Paper, Grid // Added form components
+  Typography, Box, CircularProgress, Button, Paper, Alert, Grid, Chip
 } from '@mui/material';
+import { Place as PlaceIcon, Commute as CommuteIcon, AttachMoney as AttachMoneyIcon, EventSeat as EventSeatIcon } from '@mui/icons-material';
+import formatIDR from '../utils/formatIDR';
+
+function useQuery() {
+  return new URLSearchParams(useLocation().search);
+}
 
 export default function LocalTravelDetail() {
-  const { id: localTravelId } = useParams(); // Renamed id for clarity
+  const { id: localTravelId } = useParams();
+  const query = useQuery();
+  const date = query.get('date');
   const navigate = useNavigate();
   const { currentUser } = useContext(AuthContext);
 
-  // State for booking
   const [bookingError, setBookingError] = useState(null);
   const [bookingSuccess, setBookingSuccess] = useState(null);
 
-  // Get local travel details query
-  const { loading: queryLoading, error: queryError, data } = useLocalTravelDetail(localTravelId);
+  const { loading: detailLoading, error: detailError, data: detailData } = useLocalTravelDetail(localTravelId);
+  const { loading: statusLoading, error: statusError, data: statusData } = useLocalTravelDailyStatus(localTravelId, date);
 
-  // Create local travel booking mutation
-  const [createLocalTravelBooking, { loading: mutationLoading }] = useCreateLocalTravelBooking({
+  const [createBooking, { loading: mutationLoading }] = useCreateBooking({
+    onCompleted: (data) => {
+      setBookingSuccess(`Booking successful! ID: ${data.createBooking.id}. Redirecting...`);
+      setBookingError(null);
+      setTimeout(() => navigate('/my-bookings'), 3000);
+    },
     onError: (error) => {
       setBookingError(`Booking failed: ${error.message}`);
       setBookingSuccess(null);
-    },
-    onCompleted: (mutationData) => {
-      setBookingSuccess(`Booking successful! Booking ID: ${mutationData.createLocalTravel.id}. You will be redirected to My Bookings shortly.`);
-      setBookingError(null);
-      setTimeout(() => navigate('/my-bookings'), 3000); // Redirect after a delay
     }
   });
 
@@ -37,65 +43,84 @@ export default function LocalTravelDetail() {
     setBookingSuccess(null);
 
     if (!currentUser) {
-      setBookingError('You must be logged in to book local travel.');
+      setBookingError('You must be logged in to book.');
       navigate('/login');
       return;
     }
 
-    if (!localTravelId) {
-      setBookingError('Local travel ID is missing. Cannot proceed with booking.');
+    if (!dailyStatus) {
+      setBookingError('This service is not available on the selected date.');
       return;
     }
 
     try {
-      await createLocalTravelBooking({
+      await createBooking({
         variables: {
-          userId: currentUser.id,
-          localTravelId: localTravelId,
+          input: {
+            userId: currentUser.uid,
+            bookingType: 'LOCAL_TRAVEL',
+            bookingDetails: {
+              localTravelBookingDetails: {
+                localTravelId: localTravelId,
+                travelDate: date,
+              }
+            },
+            totalAmount: dailyStatus.price,
+            currency: 'IDR',
+          }
         }
       });
     } catch (err) {
-      // Error is handled by onError in useMutation
       console.error('Booking submission error:', err);
     }
   };
 
-  if (queryLoading) return <Box display="flex" justifyContent="center" alignItems="center" minHeight="80vh"><CircularProgress /></Box>;
-  if (queryError) return <Alert severity="error">Error loading local travel details: {queryError.message}</Alert>;
-  if (!data || !data.localTravel) return <Alert severity="warning">Local travel details not found.</Alert>;
+  const loading = detailLoading || statusLoading;
+  const error = detailError || statusError;
+  const travel = detailData?.localTravel;
+  const dailyStatus = statusData?.localTravelDailyStatus;
 
-  const travel = data.localTravel;
+  if (loading) return <Box display="flex" justifyContent="center" p={5}><CircularProgress /></Box>;
+  if (error) return <Alert severity="error">Error loading details: {error.message}</Alert>;
+  if (!travel) return <Alert severity="warning">Local travel service not found.</Alert>;
 
   return (
-    <Box sx={{ padding: 3, maxWidth: 800, margin: '20px auto' }}>
-      <Paper elevation={3} sx={{ padding: 3 }}>
-        <Typography variant="h4" mb={3} align="center">Detail Travel Lokal: {travel.name}</Typography>
-        
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={8}>
-            <Typography variant="h6" gutterBottom>Informasi Perjalanan</Typography>
-            <Typography><b>Rute:</b> {travel.origin} → {travel.destination}</Typography>
-            <Typography><b>Kendaraan:</b> {travel.vehicle_model}</Typography>
-            <Typography><b>Harga:</b> Rp {travel.price?.toLocaleString()}</Typography>
-            {travel.details && <Typography sx={{ mt: 1 }}><b>Detail Tambahan:</b> {travel.details}</Typography>}
-          </Grid>
+    <Box sx={{ maxWidth: 900, margin: 'auto', padding: 3 }}>
+      <Paper elevation={3} sx={{ padding: 4 }}>
+        <Typography variant="h4" gutterBottom>{travel.providerName}</Typography>
+        <Chip icon={<CommuteIcon />} label={travel.vehicleModel} sx={{ mb: 2 }} />
+        <Typography variant="h6">{travel.originCity} to {travel.destinationCity}</Typography>
+        <Typography variant="subtitle1" color="text.secondary" gutterBottom>on {new Date(date).toLocaleDateString()}</Typography>
 
-          <Grid item xs={12} md={4} sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleBooking}
-              disabled={mutationLoading}
-              fullWidth
-              sx={{ mt: 2, py: 1.5 }}
-            >
-              {mutationLoading ? <CircularProgress size={24} /> : 'Pesan Sekarang'}
-            </Button>
-          </Grid>
-        </Grid>
+        {dailyStatus ? (
+          <Box mt={3}>
+            <Grid container spacing={2} alignItems="center">
+              <Grid item xs={12} md={8}>
+                <Typography variant="h6" gutterBottom>Availability & Price</Typography>
+                <Chip icon={<AttachMoneyIcon />} label={`${formatIDR(dailyStatus.price)}`} color="success" sx={{ mr: 1, mb: 1 }} />
+                <Chip icon={<EventSeatIcon />} label={`${dailyStatus.seatsAvailable} seats available`} sx={{ mb: 1 }} />
+              </Grid>
+              <Grid item xs={12} md={4} sx={{ textAlign: 'right' }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={handleBooking}
+                  disabled={mutationLoading || dailyStatus.seatsAvailable <= 0}
+                  sx={{ py: 1.5, px: 4 }}
+                >
+                  {mutationLoading ? <CircularProgress size={24} /> : 'Book Now'}
+                </Button>
+              </Grid>
+            </Grid>
+          </Box>
+        ) : (
+          <Alert severity="warning" sx={{ mt: 3 }}>
+            No schedule or pricing information available for the selected date.
+          </Alert>
+        )}
 
-        {bookingError && <Alert severity="error" sx={{ mt: 3 }}>{bookingError}</Alert>}
-        {bookingSuccess && <Alert severity="success" sx={{ mt: 3 }}>{bookingSuccess}</Alert>}
+        {bookingSuccess && <Alert severity="success" sx={{ mt: 2 }}>{bookingSuccess}</Alert>}
+        {bookingError && <Alert severity="error" sx={{ mt: 2 }}>{bookingError}</Alert>}
       </Paper>
     </Box>
   );

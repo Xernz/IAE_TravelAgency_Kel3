@@ -3,17 +3,16 @@ import { gql } from '@apollo/client';
 // Get all bookings for a user
 export const GET_MY_BOOKINGS = gql`
   query GetUserBookings($userId: ID!) {
-    getUserBookings(userId: $userId) {
+    userBookings(userId: $userId) {
       id
-      user_id
+      userId
       items {
         id
         type
-        ref_id
+        refId
         date
-        details
       }
-      created_at
+      createdAt
       status
     }
   }
@@ -22,17 +21,16 @@ export const GET_MY_BOOKINGS = gql`
 // Get booking by ID
 export const GET_BOOKING_BY_ID = gql`
   query GetBookingById($id: ID!) {
-    getBookingById(id: $id) {
+    booking(id: $id) {
       id
-      user_id
+      userId
       items {
         id
         type
-        ref_id
+        refId
         date
-        details
       }
-      created_at
+      createdAt
       status
     }
   }
@@ -40,18 +38,17 @@ export const GET_BOOKING_BY_ID = gql`
 
 // Create a new booking
 export const CREATE_BOOKING = gql`
-  mutation CreateBooking($userId: ID!, $items: [BookingItemInput!]!) {
-    createBooking(userId: $userId, items: $items) {
+  mutation CreateBooking($input: CreateBookingInput!) {
+    createBooking(input: $input) {
       id
-      user_id
+      userId
       items {
         id
         type
-        ref_id
+        refId
         date
-        details
       }
-      created_at
+      createdAt
       status
     }
   }
@@ -59,25 +56,24 @@ export const CREATE_BOOKING = gql`
 
 // Cancel a booking
 export const CANCEL_BOOKING = gql`
-  mutation CancelBooking($bookingId: ID!) {
-    cancelBooking(bookingId: $bookingId)
+  mutation CancelBooking($id: ID!) {
+    cancelBooking(id: $id)
   }
 `;
 
 // Modify a booking
 export const MODIFY_BOOKING = gql`
-  mutation ModifyBooking($bookingId: ID!, $items: [BookingItemInput!]!) {
-    modifyBooking(bookingId: $bookingId, items: $items) {
+  mutation ModifyBooking($id: ID!, $items: [BookingItemInput!]!) {
+    modifyBooking(id: $id, items: $items) {
       id
-      user_id
+      userId
       items {
         id
         type
-        ref_id
+        refId
         date
-        details
       }
-      created_at
+      createdAt
       status
     }
   }

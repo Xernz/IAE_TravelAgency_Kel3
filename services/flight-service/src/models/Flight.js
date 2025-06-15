@@ -1,5 +1,5 @@
 const db = require('../config/db').promise(); // Use promise-based connection
-const { paginateQuery, paginatedResponse } = require('../../../utils/pagination');
+const { paginateQuery, paginatedResponse } = require('../utils/pagination');
 
 const Flight = {
   // NOTE: create and update methods are placeholders and not used by the current API,

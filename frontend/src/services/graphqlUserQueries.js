@@ -9,11 +9,11 @@ export const LOGIN = gql`
       token
       user {
         id
-        full_name
+        fullName
         email
-        phone_number
-        birth_date
-        no_nik
+        phoneNumber
+        birthDate
+        noNik
       }
     }
   }
@@ -28,11 +28,11 @@ export const REGISTER = gql`
       token
       user {
         id
-        full_name
+        fullName
         email
-        phone_number
-        birth_date
-        no_nik
+        phoneNumber
+        birthDate
+        noNik
       }
     }
   }

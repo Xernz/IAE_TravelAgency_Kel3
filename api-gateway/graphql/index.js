@@ -8,6 +8,7 @@ const { typeDefs: paymentTypeDefs, resolvers: paymentResolvers } = require('./pa
 const { typeDefs: flightTypeDefs, resolvers: flightResolvers } = require('./flight');
 const { typeDefs: trainTypeDefs, resolvers: trainResolvers } = require('./train');
 const { typeDefs: localTravelTypeDefs, resolvers: localTravelResolvers } = require('./localTravel');
+const { typeDefs: externalAuthTypeDefs, resolvers: externalAuthResolvers } = require('./externalAuth'); // Added import for externalAuth
 
 // Combine all typeDefs and resolvers (add more as you expand other domains)
 const typeDefs = [
@@ -17,7 +18,8 @@ const typeDefs = [
   paymentTypeDefs,
   flightTypeDefs,
   trainTypeDefs,
-  localTravelTypeDefs
+  localTravelTypeDefs,
+  externalAuthTypeDefs // Added externalAuthTypeDefs
 ];
 const resolvers = [
   bookingResolvers,
@@ -26,7 +28,8 @@ const resolvers = [
   paymentResolvers,
   flightResolvers,
   trainResolvers,
-  localTravelResolvers
+  localTravelResolvers,
+  externalAuthResolvers // Added externalAuthResolvers
 ];
 
 async function startApolloServer(app) { // Accept the main app instance

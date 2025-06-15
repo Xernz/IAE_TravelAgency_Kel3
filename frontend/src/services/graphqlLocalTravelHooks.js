@@ -1,90 +1,67 @@
 import { useQuery, useMutation } from '@apollo/client';
 import {
+  FILTER_LOCAL_TRAVELS,
   GET_LOCAL_TRAVEL_DETAIL,
-  GET_LOCAL_TRAVEL,
-  LOCAL_TRAVEL_PRICING,
-  // Add other local travel queries as needed
+  GET_LOCAL_TRAVEL_DAILY_STATUS,
+  CREATE_LOCAL_TRAVEL,
 } from './graphqlLocalTravelQueries';
 import {
   CREATE_BOOKING,
   CANCEL_BOOKING,
-  // Add other booking mutations as needed
-} from './graphqlBookingQueries';
+} from './graphqlBookingQueries'; // Assuming this file exists and is correct
 
-// Query Hooks
-export function useLocalTravels(filters = {}) {
-  const {
-    page = 1,
-    limit = 10,
-    sort_by,
-    sort_order,
-    origin_city,
-    destination_city,
-    origin_province,
-    destination_province,
-    origin_kabupaten,
-    destination_kabupaten,
-    date,
-    type,
-    operator_name,
-    provider,
-    min_capacity,
-    max_capacity,
-    amenities_include_any,
-    amenities_include_all,
-    min_price,
-    max_price,
-  } = filters;
+/**
+ * Hook to fetch and filter local travel options.
+ * @param {object} params - The filter, sort, and pagination parameters.
+ * @param {string} params.statusDate - The date for which to fetch status (YYYY-MM-DD).
+ */
+export function useFilterLocalTravels({ filters = {}, sort = {}, pagination = {}, statusDate }) {
+  // Clean up undefined keys from filters, sort, and pagination objects
+  const cleanedFilters = Object.fromEntries(Object.entries(filters).filter(([_, v]) => v != null));
+  const cleanedSort = Object.fromEntries(Object.entries(sort).filter(([_, v]) => v != null));
+  const cleanedPagination = Object.fromEntries(Object.entries(pagination).filter(([_, v]) => v != null));
 
-  const filtersObj = {
-    origin_city,
-    destination_city,
-    origin_province,
-    destination_province,
-    origin_kabupaten,
-    destination_kabupaten,
-    date,
-    type,
-    operator_name,
-    provider,
-    min_capacity,
-    max_capacity,
-    amenities_include_any,
-    amenities_include_all,
-    min_price: min_price ? parseFloat(min_price) : undefined,
-    max_price: max_price ? parseFloat(max_price) : undefined,
-  };
-  Object.keys(filtersObj).forEach(key => filtersObj[key] === undefined && delete filtersObj[key]);
-
-  const sort = {
-    sortBy: sort_by,
-    sortOrder: sort_order,
-  };
-  Object.keys(sort).forEach(key => sort[key] === undefined && delete sort[key]);
-
-  const pagination = {
-    page,
-    limit,
-  };
-  Object.keys(pagination).forEach(key => pagination[key] === undefined && delete pagination[key]);
-
-  const queryVariables = { filters: filtersObj, sort, pagination };
-
-  return useQuery(GET_LOCAL_TRAVEL, {
-    variables: queryVariables,
+  return useQuery(FILTER_LOCAL_TRAVELS, {
+    variables: {
+      filters: cleanedFilters,
+      sort: cleanedSort,
+      pagination: cleanedPagination,
+      statusDate,
+    },
     fetchPolicy: 'cache-and-network',
+    skip: !statusDate, // Don't run the query if the statusDate isn't provided
   });
 }
 
-export function useLocalTravelDetail(id) {
-  return useQuery(GET_LOCAL_TRAVEL_DETAIL, { variables: { id } });
+/**
+ * Hook to fetch the details of a single local travel option, including its daily status for a specific date.
+ * @param {string} id - The ID of the local travel option.
+ * @param {string} date - The date for which to fetch the status (YYYY-MM-DD).
+ */
+export function useLocalTravelDetail(id, date) {
+  return useQuery(GET_LOCAL_TRAVEL_DETAIL, {
+    variables: { id, date },
+    skip: !id || !date, // Don't run if id or date are missing
+  });
 }
 
-export function useLocalTravelPricing(id, check_in, check_out) {
-  return useQuery(LOCAL_TRAVEL_PRICING, { variables: { id, check_in, check_out } });
+/**
+ * Hook to fetch the daily status (price, availability) for a specific local travel option on a given date.
+ * @param {string} localTravelId - The ID of the local travel option.
+ * @param {string} date - The date for which to fetch status (YYYY-MM-DD).
+ */
+export function useLocalTravelDailyStatus(localTravelId, date) {
+  return useQuery(GET_LOCAL_TRAVEL_DAILY_STATUS, {
+    variables: { localTravelId, date },
+    skip: !localTravelId || !date, // Don't run if localTravelId or date are missing
+  });
 }
 
 // Mutation Hooks
+export function useCreateLocalTravel(options = {}) {
+  return useMutation(CREATE_LOCAL_TRAVEL, options);
+}
+
 export function useCreateLocalTravelBooking(options = {}) {
   return useMutation(CREATE_BOOKING, options);
 }
